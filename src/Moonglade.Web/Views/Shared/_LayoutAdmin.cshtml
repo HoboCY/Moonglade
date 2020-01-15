@@ -1,16 +1,11 @@
 ﻿@inject Microsoft.ApplicationInsights.AspNetCore.JavaScriptSnippet JavaScriptSnippet
-@using Microsoft.Extensions.Options
-@using Moonglade.Configuration.Abstraction
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment WebHostEnvironment
+
 @using Moonglade.Core
-@using Moonglade.Model.Settings
 @{
     var currentController = ViewContext.RouteData?.Values["controller"]?.ToString();
 }
-@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
-@inject IOptions<AppSettings> Settings
-@inject IBlogConfig BlogConfig
-@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment WebHostEnvironment
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -35,6 +30,7 @@
     <environment include="Production">
         @Html.Raw(JavaScriptSnippet.FullScript)
     </environment>
+    <link href="~/css/theme/@BlogConfig.GeneralSettings.ThemeFileName" rel="stylesheet" asp-append-version="true" />
 </head>
 <body class="admin-body">
     <div class="container-fluid full-height">
@@ -64,21 +60,21 @@
                             <span class="icon-folder"></span>
                             Categories
                         </a>
-                        <a asp-controller="Tags" asp-action="Manage" class="list-group-item list-group-item-action @(currentController == "Tags" ? "active" : null)">
-                            <span class="icon-price-tag"></span>
-                            Tags
-                        </a>
                         <a asp-controller="Comment" asp-action="Manage" class="list-group-item list-group-item-action @(currentController == "Comment" ? "active" : null)">
                             <span class="icon-bubbles3"></span>
                             Comments
                         </a>
-                        <a asp-controller="Pingback" asp-action="Manage" class="list-group-item list-group-item-action @(currentController == "Pingback" ? "active" : null)">
-                            <span class="icon-earth"></span>
-                            Pingbacks
+                        <a asp-controller="Tags" asp-action="Manage" class="list-group-item list-group-item-action @(currentController == "Tags" ? "active" : null)">
+                            <span class="icon-price-tag"></span>
+                            Tags
                         </a>
                         <a asp-controller="CustomPage" asp-action="Manage" class="list-group-item list-group-item-action @(currentController == "CustomPage" ? "active" : null)">
                             <span class="icon-file-text2"></span>
                             Pages
+                        </a>
+                        <a asp-controller="Pingback" asp-action="Manage" class="list-group-item list-group-item-action @(currentController == "Pingback" ? "active" : null)">
+                            <span class="icon-earth"></span>
+                            Pingbacks
                         </a>
                         <a asp-controller="Settings" asp-action="GeneralSettings" class="list-group-item list-group-item-action @(currentController == "Settings" ? "active" : null)">
                             <span class="icon-cog"></span>

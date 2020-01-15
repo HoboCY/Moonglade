@@ -1,4 +1,6 @@
-﻿@{
+﻿@model AdvancedSettingsViewModel
+
+@{
     Layout = "_LayoutAdmin";
 }
 @Html.AntiForgeryToken()
@@ -19,58 +21,73 @@
 
 <partial name="_SettingsHeader" />
 
-<div class="card mb-4">
-    <div class="card-header">
-        Server Information
+<form id="form-settings" asp-controller="Settings" asp-action="AdvancedSettings"
+      data-ajax-begin="onUpdateSettingsBegin"
+      data-ajax-complete="onUpdateSettingsComplete"
+      data-ajax-failure="onUpdateSettingsFailed"
+      data-ajax-success="onUpdateSettingsSuccess"
+      data-ajax="true"
+      data-ajax-method="POST">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">Advanced Settings</div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label asp-for="DNSPrefetchEndpoint" class="control-label"></label>
+                        <input asp-for="DNSPrefetchEndpoint" class="form-control" />
+                        <span asp-validation-for="DNSPrefetchEndpoint" class="text-danger"></span>
+                    </div>
+                </div>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <label asp-for="EnablePingBackSend" class="control-label"></label>
+                        <div class="material-switch float-right">
+                            <input @(Model.EnablePingBackSend ? "checked=\"checked\"" : "") id="EnablePingBackSend" name="EnablePingBackSend" type="checkbox" value="true">
+                            <label for="EnablePingBackSend" class="label-success"></label>
+                            <input name="EnablePingBackSend" type="hidden" value="false">
+                        </div>
+                    </li>
+                    <li class="list-group-item">
+                        <label asp-for="EnablePingBackReceive" class="control-label"></label>
+                        <div class="material-switch float-right">
+                            <input @(Model.EnablePingBackReceive ? "checked=\"checked\"" : "") id="EnablePingBackReceive" name="EnablePingBackReceive" type="checkbox" value="true">
+                            <label for="EnablePingBackReceive" class="label-success"></label>
+                            <input name="EnablePingBackReceive" type="hidden" value="false">
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    Options
+                </div>
+                <div class="card-body">
+                    <h6>Restart Website</h6>
+                    <hr />
+
+                    <div class="alert alert-warning">Try to shutdown and restart the website, this will terminate all current requests.</div>
+
+                    <button class="btn btn-danger" data-toggle="modal" data-target="#restartModal">Restart</button>
+
+                    <h6 class="mt-4">System Reset</h6>
+                    <hr />
+
+                    <div class="alert alert-warning">Erase all data and configuration.</div>
+
+                    <button class="btn btn-danger" data-toggle="modal" data-target="#resetModal">Reset</button>
+                </div>
+            </div>
+        </div>
     </div>
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Item</th>
-                <th>Value</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>System</td>
-                <td>@System.Runtime.InteropServices.RuntimeInformation.OSDescription</td>
-            </tr>
-            <tr>
-                <td>Directory</td>
-                <td>@Environment.CurrentDirectory</td>
-            </tr>
-            <tr>
-                <td>x64 Process</td>
-                <td>@Environment.Is64BitProcess</td>
-            </tr>
-            <tr>
-                <td>User Name</td>
-                <td>@Environment.UserName</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
-
-<div class="card">
-    <div class="card-header">
-        Options
+    <hr />
+    <div class="form-group">
+        <input id="btn-save-settings" type="submit" value="Save" class="btn btn-success" />
     </div>
-    <div class="card-body">
-        <h6>Restart Website</h6>
-        <hr />
-
-        <div class="alert alert-warning">Try to shutdown and restart the website, this will terminate all current requests.</div>
-
-        <button class="btn btn-danger" data-toggle="modal" data-target="#restartModal">Restart</button>
-
-        <h6 class="mt-4">System Reset</h6>
-        <hr />
-
-        <div class="alert alert-warning">Erase all data and configuration.</div>
-
-        <button class="btn btn-danger" data-toggle="modal" data-target="#resetModal">Reset</button>
-    </div>
-</div>
+</form>
 
 <div class="modal fade" id="restartModal" tabindex="-1" role="dialog" aria-labelledby="restartModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">

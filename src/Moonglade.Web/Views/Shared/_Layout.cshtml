@@ -1,16 +1,11 @@
 ﻿@inject Microsoft.ApplicationInsights.AspNetCore.JavaScriptSnippet JavaScriptSnippet
-@using Microsoft.Extensions.Options
-@using Moonglade.Configuration.Abstraction
-@using Moonglade.Model.Settings
-@{
-    string currentController = ViewContext.RouteData?.Values["controller"]?.ToString();
-    string currentAction = ViewContext.RouteData?.Values["action"]?.ToString();
-    string customPageRouteName = ViewContext.RouteData?.Values["routeName"]?.ToString();
-}
 @inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
-@inject IOptions<AppSettings> Settings
-@inject IBlogConfig BlogConfig
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment WebHostEnvironment
+@{
+    var currentController = ViewContext.RouteData?.Values["controller"]?.ToString();
+    var currentAction = ViewContext.RouteData?.Values["action"]?.ToString();
+    var customPageRouteName = ViewContext.RouteData?.Values["routeName"]?.ToString();
+}
 
 <!DOCTYPE html>
 <html>
@@ -32,10 +27,18 @@
         <meta name="keywords" content="@Html.Raw(BlogConfig.GeneralSettings.MetaKeyword)" />
     }
     @RenderSection("meta", false)
-
-    @if (!string.IsNullOrWhiteSpace(Settings.Value.DNSPrefetchEndpoint))
+    @if (IsSectionDefined("metadescription"))
     {
-        <link rel="dns-prefetch" href="@Settings.Value.DNSPrefetchEndpoint" />
+        @RenderSection("metadescription", false)
+    }
+    else
+    {
+        <meta name="description" content="@BlogConfig.GeneralSettings.MetaDescription" />
+    }
+
+    @if (!string.IsNullOrWhiteSpace(BlogConfig.AdvancedSettings.DNSPrefetchEndpoint))
+    {
+        <link rel="dns-prefetch" href="@BlogConfig.AdvancedSettings.DNSPrefetchEndpoint" />
     }
     <link rel="start" title="@BlogConfig.GeneralSettings.SiteTitle" href="~/" />
     <link rel="alternate" type="application/rss+xml" title="@BlogConfig.FeedSettings.RssTitle" href="~/rss" />
@@ -47,10 +50,11 @@
     <environment include="Production">
         @Html.Raw(JavaScriptSnippet.FullScript)
     </environment>
+    <link href="~/css/theme/@BlogConfig.GeneralSettings.ThemeFileName" rel="stylesheet" asp-append-version="true" />
 </head>
 <body>
     <header class="ediblog-header">
-        <nav class="navbar fixed-top navbar-expand-lg navbar-dark bg-moonglade-blue">
+        <nav id="moonglade-nav" class="navbar fixed-top navbar-expand-lg navbar-dark bg-moonglade-accent1">
             <div class="container">
                 <div class="animbrand">
                     <a class="moonglade-logo navbar-brand animate" href="/">
@@ -94,7 +98,7 @@
                     </ul>
                     <form class="form-inline search-form my-2 my-lg-0" asp-controller="Search" asp-action="Index">
                         <input id="term"
-                               class="form-control mr-sm-2"
+                               class="form-control bg-transparent mr-sm-2"
                                type="search"
                                value=""
                                title="Search"
@@ -110,10 +114,10 @@
         </nav>
     </header>
 
-    @if (BlogConfig.GeneralSettings.ShowCalloutSection)
+    @if (BlogConfig.ContentSettings.ShowCalloutSection)
     {
         <section class="call-out">
-            @Html.Raw(BlogConfig.GeneralSettings.CalloutSectionHtmlPitch)
+            @Html.Raw(BlogConfig.ContentSettings.CalloutSectionHtmlPitch)
         </section>
     }
 

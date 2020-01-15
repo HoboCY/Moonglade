@@ -67,6 +67,7 @@ namespace Moonglade.Web.HtmlHelpers
         /// <summary>
         /// Returns a Globally Recognised Avatar as an &lt;img /&gt; - http://gravatar.com
         /// </summary>
+        /// <param name="htmlHelper">IHtmlHelper</param>
         /// <param name="emailAddress">Email Address for the Gravatar</param>
         /// <param name="defaultImage">Default image if user hasn't created a Gravatar</param>
         /// <param name="size">Size in pixels (default: 80)</param>
@@ -74,6 +75,8 @@ namespace Moonglade.Web.HtmlHelpers
         /// <param name="forceDefaultImage">Prefer the default image over the users own Gravatar</param>
         /// <param name="rating">Gravatar content rating (note that Gravatars are self-rated)</param>
         /// <param name="forceSecureRequest">Always do secure (https) requests</param>
+        /// <param name="cssClass">CSS Class</param>
+        /// <param name="alt">Alt Text</param>
         public static IHtmlContent GravatarImage(
             this IHtmlHelper htmlHelper,
             string emailAddress,
@@ -145,13 +148,10 @@ namespace Moonglade.Web.HtmlHelpers
             var type = en.GetType();
             var memInfo = type.GetMember(en.ToString());
 
-            if (memInfo == null || memInfo.Length <= 0) return en.ToString();
+            if (memInfo.Length <= 0) return en.ToString();
             var attrs = memInfo[0].GetCustomAttributes(typeof(DescriptionAttribute), false);
 
-            if (attrs != null && attrs.Any())
-                return ((DescriptionAttribute)attrs.First()).Description;
-
-            return en.ToString();
+            return attrs.Any() ? ((DescriptionAttribute)attrs.First()).Description : en.ToString();
         }
     }
 }

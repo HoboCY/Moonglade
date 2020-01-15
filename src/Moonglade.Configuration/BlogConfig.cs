@@ -33,6 +33,8 @@ namespace Moonglade.Configuration
 
         public FriendLinksSettings FriendLinksSettings { get; set; }
 
+        public AdvancedSettings AdvancedSettings { get; set; }
+
         private bool _hasInitialized;
 
         public BlogConfig(
@@ -49,28 +51,29 @@ namespace Moonglade.Configuration
             FeedSettings = new FeedSettings();
             WatermarkSettings = new WatermarkSettings();
             FriendLinksSettings = new FriendLinksSettings();
+            AdvancedSettings = new AdvancedSettings();
 
             Initialize();
         }
 
         private void Initialize()
         {
-            if (!_hasInitialized)
-            {
-                var cfgDic = GetAllConfigurations();
+            if (_hasInitialized) return;
 
-                var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var cfgDic = GetAllConfigurations();
 
-                BlogOwnerSettings = JsonSerializer.Deserialize<BlogOwnerSettings>(cfgDic[nameof(BlogOwnerSettings)], jsonOptions);
-                GeneralSettings = JsonSerializer.Deserialize<GeneralSettings>(cfgDic[nameof(GeneralSettings)], jsonOptions);
-                ContentSettings = JsonSerializer.Deserialize<ContentSettings>(cfgDic[nameof(ContentSettings)], jsonOptions);
-                EmailSettings = JsonSerializer.Deserialize<EmailSettings>(cfgDic[nameof(EmailSettings)], jsonOptions);
-                FeedSettings = JsonSerializer.Deserialize<FeedSettings>(cfgDic[nameof(FeedSettings)], jsonOptions);
-                WatermarkSettings = JsonSerializer.Deserialize<WatermarkSettings>(cfgDic[nameof(WatermarkSettings)], jsonOptions);
-                FriendLinksSettings = JsonSerializer.Deserialize<FriendLinksSettings>(cfgDic[nameof(FriendLinksSettings)], jsonOptions);
+            var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
-                _hasInitialized = true;
-            }
+            BlogOwnerSettings = JsonSerializer.Deserialize<BlogOwnerSettings>(cfgDic[nameof(BlogOwnerSettings)], jsonOptions);
+            GeneralSettings = JsonSerializer.Deserialize<GeneralSettings>(cfgDic[nameof(GeneralSettings)], jsonOptions);
+            ContentSettings = JsonSerializer.Deserialize<ContentSettings>(cfgDic[nameof(ContentSettings)], jsonOptions);
+            EmailSettings = JsonSerializer.Deserialize<EmailSettings>(cfgDic[nameof(EmailSettings)], jsonOptions);
+            FeedSettings = JsonSerializer.Deserialize<FeedSettings>(cfgDic[nameof(FeedSettings)], jsonOptions);
+            WatermarkSettings = JsonSerializer.Deserialize<WatermarkSettings>(cfgDic[nameof(WatermarkSettings)], jsonOptions);
+            FriendLinksSettings = JsonSerializer.Deserialize<FriendLinksSettings>(cfgDic[nameof(FriendLinksSettings)], jsonOptions);
+            AdvancedSettings = JsonSerializer.Deserialize<AdvancedSettings>(cfgDic[nameof(AdvancedSettings)], jsonOptions);
+
+            _hasInitialized = true;
         }
 
         public async Task<Response> SaveConfigurationAsync<T>(T moongladeSettings) where T : MoongladeSettings
@@ -78,21 +81,19 @@ namespace Moonglade.Configuration
             async Task<int> SetConfiguration(string key, string value)
             {
                 var connStr = _configuration.GetConnectionString(Constants.DbConnectionName);
-                using (var conn = new SqlConnection(connStr))
-                {
-                    string sql = $"UPDATE {nameof(BlogConfiguration)} " +
-                                 $"SET {nameof(BlogConfiguration.CfgValue)} = @value, " +
-                                 $"{nameof(BlogConfiguration.LastModifiedTimeUtc)} = @lastModifiedTimeUtc " +
-                                 $"WHERE {nameof(BlogConfiguration.CfgKey)} = @key";
+                await using var conn = new SqlConnection(connStr);
+                var sql = $"UPDATE {nameof(BlogConfiguration)} " +
+                          $"SET {nameof(BlogConfiguration.CfgValue)} = @value, " +
+                          $"{nameof(BlogConfiguration.LastModifiedTimeUtc)} = @lastModifiedTimeUtc " +
+                          $"WHERE {nameof(BlogConfiguration.CfgKey)} = @key";
 
-                    return await conn.ExecuteAsync(sql, new { key, value, lastModifiedTimeUtc = DateTime.UtcNow });
-                }
+                return await conn.ExecuteAsync(sql, new { key, value, lastModifiedTimeUtc = DateTime.UtcNow });
             }
 
             try
             {
                 var json = JsonSerializer.Serialize(moongladeSettings);
-                int rows = await SetConfiguration(typeof(T).Name, json);
+                var rows = await SetConfiguration(typeof(T).Name, json);
                 return new Response(rows > 0);
             }
             catch (Exception e)
@@ -112,16 +113,14 @@ namespace Moonglade.Configuration
             try
             {
                 var connStr = _configuration.GetConnectionString(Constants.DbConnectionName);
-                using (var conn = new SqlConnection(connStr))
-                {
-                    string sql = $"SELECT {nameof(BlogConfiguration.CfgKey)}, " +
-                                 $"{nameof(BlogConfiguration.CfgValue)} " +
-                                 $"FROM {nameof(BlogConfiguration)}";
+                using var conn = new SqlConnection(connStr);
+                var sql = $"SELECT {nameof(BlogConfiguration.CfgKey)}, " +
+                          $"{nameof(BlogConfiguration.CfgValue)} " +
+                          $"FROM {nameof(BlogConfiguration)}";
 
-                    var data = conn.Query<(string CfgKey, string CfgValue)>(sql);
-                    var dic = data.ToDictionary(c => c.CfgKey, c => c.CfgValue);
-                    return dic;
-                }
+                var data = conn.Query<(string CfgKey, string CfgValue)>(sql);
+                var dic = data.ToDictionary(c => c.CfgKey, c => c.CfgValue);
+                return dic;
             }
             catch (Exception e)
             {

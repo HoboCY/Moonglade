@@ -7,24 +7,29 @@
 }
 
 <h3 class="h3-cat-list">
-    <a class="float-right d-none d-md-block" asp-controller="Subscription" asp-action="Rss" target="_blank" title="Subscribe Top 20 Posts">
+    <a class="float-right d-none d-md-block" asp-controller="Subscription" asp-action="Rss" target="_blank" title="Subscribe Recent 20 Posts">
         <span class="icon-rss"></span>
     </a>
     <span>
         All Posts
     </span>
-    <small class="d-none d-md-inline">(@Model.TotalItemCount)</small>
-    <span class="badge d-inline d-sm-none float-right">@Model.TotalItemCount</span>
 </h3>
 <hr />
 
-@if (Model.Any())
+@if (null != ViewBag.IsServerError && ViewBag.IsServerError)
 {
-    <partial name="_PostList" />
+    <partial name="_ServerErrorMessage" />
 }
 else
 {
-    <div class="alert alert-info">
-        No Posts.
-    </div>
+    if (Model.Any())
+    {
+        <partial name="_PostList" />
+    }
+    else
+    {
+        <div class="alert alert-info">
+            No Posts.
+        </div>
+    }
 }

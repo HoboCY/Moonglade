@@ -9,8 +9,13 @@ namespace Moonglade.Web.Models.Settings
         public bool EnableComments { get; set; }
 
         [Required]
+        [Display(Name = "Comments Require Blog Admin Review and Approval")]
+        public bool RequireCommentReview { get; set; }
+
+        [Required]
         [DataType(DataType.MultilineText)]
         [Display(Name = "Blocked Words")]
+        [MaxLength(2048)]
         public string DisharmonyWords { get; set; }
 
         [Required]
@@ -34,5 +39,23 @@ namespace Moonglade.Web.Models.Settings
         [Required]
         [Display(Name = "Enable Gravatar in Comment List")]
         public bool EnableGravatar { get; set; }
+
+        [Required]
+        [Display(Name = "Enable Image Lazy Load")]
+        public bool EnableImageLazyLoad { get; set; }
+
+        [Display(Name = "Call-out Section Html Pitch")]
+        [DataType(DataType.MultilineText)]
+        [MaxLength(2048)]
+        public string CalloutSectionHtmlPitch { get; set; }
+
+        [Display(Name = "Show Call-out Section")]
+        public bool ShowCalloutSection { get; set; }
+
+        [Display(Name = "Show customize footer on each post")]
+        public bool ShowPostFooter { get; set; }
+
+        [Display(Name = "Post footer HTML Pitch")]
+        public string PostFooterHtmlPitch { get; set; }
     }
 }

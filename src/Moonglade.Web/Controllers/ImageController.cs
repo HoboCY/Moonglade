@@ -2,7 +2,6 @@
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Edi.Captcha;
 using Edi.ImageWatermark;
@@ -49,17 +48,14 @@ namespace Moonglade.Web.Controllers
             var iconPath = Path.Combine(faviconDirectory, filename.ToLower());
             if (System.IO.File.Exists(iconPath))
             {
-                string contentType = "image/png";
+                var contentType = "image/png";
                 var ext = Path.GetExtension(filename);
-                switch (ext)
+                contentType = ext switch
                 {
-                    case ".png":
-                        contentType = "image/png";
-                        break;
-                    case ".ico":
-                        contentType = "image/x-icon";
-                        break;
-                }
+                    ".png" => "image/png",
+                    ".ico" => "image/x-icon",
+                    _ => contentType
+                };
                 return PhysicalFile(iconPath, contentType);
             }
 
@@ -153,7 +149,7 @@ namespace Moonglade.Web.Controllers
                         SkipWatermarkForSmallImages = true,
                         SmallImagePixelsThreshold = Constants.SmallImagePixelsThreshold
                     };
-                    Logger.LogInformation($"Adding watermark onto image {primaryFileName}");
+                    Logger.LogInformation($"Adding watermark onto image '{primaryFileName}'");
 
                     watermarkedStream = watermarker.AddWatermark(
                         _blogConfig.WatermarkSettings.WatermarkText,
@@ -174,11 +170,15 @@ namespace Moonglade.Web.Controllers
                     _ = Task.Run(async () => await _imageStorageProvider.InsertAsync(secondaryFieName, arr));
                 }
 
-                Logger.LogInformation("Image Uploaded: " + JsonSerializer.Serialize(response));
+                Logger.LogInformation($"Image '{primaryFileName}' uloaded.");
 
                 if (response.IsSuccess)
                 {
-                    return Json(new { location = $"/uploads/{response.Item}" });
+                    return Json(new
+                    {
+                        location = $"/uploads/{response.Item}",
+                        filename = response.Item
+                    });
                 }
                 Logger.LogError(response.Message);
                 return ServerError();
@@ -200,6 +200,7 @@ namespace Moonglade.Web.Controllers
         }
 
         [Route("avatar")]
+        [ResponseCache(Duration = 300)]
         public IActionResult Avatar([FromServices] IMemoryCache cache)
         {
             var fallbackImageFile =
@@ -223,6 +224,11 @@ namespace Moonglade.Web.Controllers
             {
                 Logger.LogError($"Error {nameof(Avatar)}(), Invalid Base64 string", e);
                 return PhysicalFile(fallbackImageFile, "image/png");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Error {nameof(Avatar)}()", ex);
+                return new EmptyResult();
             }
         }
     }

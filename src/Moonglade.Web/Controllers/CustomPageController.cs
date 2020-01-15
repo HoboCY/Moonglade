@@ -49,6 +49,7 @@ namespace Moonglade.Web.Controllers
             {
                 if (pageResponse.Item == null)
                 {
+                    Logger.LogWarning($"Custom page not found. {nameof(routeName)}: '{routeName}'");
                     return NotFound();
                 }
 
@@ -62,11 +63,7 @@ namespace Moonglade.Web.Controllers
         public async Task<IActionResult> Manage()
         {
             var response = await _customPageService.GetPagesMetaDataListAsync();
-            if (response.IsSuccess)
-            {
-                return View(response.Item);
-            }
-            return ServerError();
+            return response.IsSuccess ? View(response.Item) : ServerError();
         }
 
         [Authorize]
@@ -133,6 +130,8 @@ namespace Moonglade.Web.Controllers
 
                     if (response.IsSuccess)
                     {
+                        Logger.LogInformation($"User '{User.Identity.Name}' updated custom page id '{response.Item}'");
+
                         var cacheKey = $"page-{req.RouteName.ToLower()}";
                         cache.Remove(cacheKey);
 
@@ -165,6 +164,8 @@ namespace Moonglade.Web.Controllers
                 {
                     var cacheKey = $"page-{routeName.ToLower()}";
                     cache.Remove(cacheKey);
+
+                    Logger.LogInformation($"User '{User.Identity.Name}' deleted custom page id: '{pageId}', {nameof(routeName)}: '{routeName}'");
 
                     return Json(pageId);
                 }

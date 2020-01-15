@@ -96,11 +96,11 @@ namespace Moonglade.Web
             services.TryAddSingleton<IActionContextAccessor, ActionContextAccessor>();
             services.AddSingleton<IBlogConfig, BlogConfig>();
             services.AddScoped<DeleteSubscriptionCache>();
-            services.AddTransient<IHtmlCodec, HttpUtilityHtmlCodec>();
-            services.AddTransient<IPingbackSender, PingbackSender>();
-            services.AddTransient<IPingbackReceiver, PingbackReceiver>();
-            services.AddTransient<IFileSystemOpmlWriter, FileSystemOpmlWriter>();
-            services.AddTransient<IFileNameGenerator>(gen => new GuidFileNameGenerator(Guid.NewGuid()));
+            services.AddScoped<IHtmlCodec, MoongladeHtmlCodec>();
+            services.AddScoped<IPingbackSender, PingbackSender>();
+            services.AddScoped<IPingbackReceiver, PingbackReceiver>();
+            services.AddScoped<IFileSystemOpmlWriter, FileSystemOpmlWriter>();
+            services.AddScoped<IFileNameGenerator>(gen => new GuidFileNameGenerator(Guid.NewGuid()));
             services.AddSessionBasedCaptcha();
 
             var asm = Assembly.GetAssembly(typeof(MoongladeService));
@@ -109,7 +109,7 @@ namespace Moonglade.Web
                 var types = asm.GetTypes().Where(t => t.IsClass && t.IsPublic && t.Name.EndsWith("Service"));
                 foreach (var t in types)
                 {
-                    services.AddTransient(t, t);
+                    services.AddScoped(t, t);
                 }
             }
 
@@ -130,9 +130,9 @@ namespace Moonglade.Web
                            .UseSqlServer(_configuration.GetConnectionString(Constants.DbConnectionName), sqlOptions =>
                                {
                                    sqlOptions.EnableRetryOnFailure(
-                                       maxRetryCount: 3,
-                                       maxRetryDelay: TimeSpan.FromSeconds(30),
-                                       errorNumbersToAdd: null);
+                                       3,
+                                       TimeSpan.FromSeconds(30),
+                                       null);
                                }));
         }
 
@@ -197,7 +197,7 @@ namespace Moonglade.Web
 
             if (!_environment.IsProduction())
             {
-                _logger.LogWarning("Running on non-production mode. Application Insights disabled.");
+                _logger.LogWarning($"Running in environment: {_environment.EnvironmentName}. Application Insights disabled.");
 
                 configuration.DisableTelemetry = true;
                 TelemetryDebugWriter.IsTracingDisabled = true;
@@ -205,20 +205,13 @@ namespace Moonglade.Web
 
             if (_environment.IsDevelopment())
             {
+                _logger.LogWarning($"Running in environment: {_environment.EnvironmentName}. Detailed error page enabled.");
                 app.UseDeveloperExceptionPage();
             }
             else
             {
                 app.UseExceptionHandler("/error");
                 app.UseStatusCodePagesWithReExecute("/error", "?statusCode={0}");
-
-                // Workaround .NET Core 3.0 known bug
-                // https://github.com/aspnet/AspNetCore/issues/13715
-                app.Use((context, next) =>
-                {
-                    context.SetEndpoint(null);
-                    return next();
-                });
             }
 
             if (enforceHttps)
@@ -264,7 +257,9 @@ namespace Moonglade.Web
                 {
                     try
                     {
+                        _logger.LogInformation("Initializing first run configuration...");
                         setupHelper.InitFirstRun();
+                        _logger.LogInformation("Database setup successfully.");
                     }
                     catch (Exception e)
                     {
@@ -283,7 +278,7 @@ namespace Moonglade.Web
                 {
                     builder.Run(async context =>
                     {
-                        await context.Response.WriteAsync("Moonglade Version: " + Utils.AppVersion, Encoding.UTF8);
+                        await context.Response.WriteAsync($"Moonglade Version: {Utils.AppVersion}, .NET Core {Environment.Version}", Encoding.UTF8);
                     });
                 });
 
@@ -294,8 +289,8 @@ namespace Moonglade.Web
                 app.UseEndpoints(endpoints =>
                 {
                     endpoints.MapControllerRoute(
-                        name: "default",
-                        pattern: "{controller=Home}/{action=Index}/{id?}");
+                        "default",
+                        "{controller=Home}/{action=Index}/{id?}");
                     endpoints.MapRazorPages();
                 });
             }
@@ -321,7 +316,7 @@ namespace Moonglade.Web
             }
         }
 
-        private void PrepareRuntimePathDependencies(IApplicationBuilder app, IWebHostEnvironment env)
+        private void PrepareRuntimePathDependencies(IApplicationBuilder app, IHostEnvironment env)
         {
             void DeleteDataFile(string path)
             {
@@ -348,15 +343,15 @@ namespace Moonglade.Web
             }
 
             var baseDir = env.ContentRootPath;
-            TryUseUrlRewrite(app, baseDir);
+            TryUseUrlRewrite(app);
             AppDomain.CurrentDomain.SetData(Constants.AppBaseDirectory, baseDir);
 
             // Use Temp folder as best practice
             // Do NOT create or modify anything under application directory
             // e.g. Azure Deployment using WEBSITE_RUN_FROM_PACKAGE will make website root directory read only.
-            string tPath = Path.GetTempPath();
+            var tPath = Path.GetTempPath();
             _logger.LogInformation($"Server environment Temp path: {tPath}");
-            string moongladeAppDataPath = Path.Combine(tPath, @"moonglade\App_Data");
+            var moongladeAppDataPath = Path.Combine(tPath, @"moonglade\App_Data");
             if (Directory.Exists(moongladeAppDataPath))
             {
                 Directory.Delete(moongladeAppDataPath, true);
@@ -376,25 +371,15 @@ namespace Moonglade.Web
             CleanDataCache();
         }
 
-        private void TryUseUrlRewrite(IApplicationBuilder app, string baseDir)
+        private void TryUseUrlRewrite(IApplicationBuilder app)
         {
             try
             {
-                var urlRewriteConfigPath = Path.Combine(baseDir, "urlrewrite.xml");
-                if (File.Exists(urlRewriteConfigPath))
-                {
-                    using var sr = File.OpenText(urlRewriteConfigPath);
-                    var options = new RewriteOptions()
-                                    .AddRedirect("(.*)/$", "$1")
-                                    .AddRedirect("(index|default).(aspx?|htm|s?html|php|pl|jsp|cfm)", "/")
-                                    .AddRedirect("^favicon/(.*).png$", "/$1.png")
-                                    .AddIISUrlRewrite(sr);
-                    app.UseRewriter(options);
-                }
-                else
-                {
-                    _logger.LogWarning($"Can not find {urlRewriteConfigPath}, skip adding url rewrite.");
-                }
+                var options = new RewriteOptions()
+                    .AddRedirect("(.*)/$", "$1")
+                    .AddRedirect("(index|default).(aspx?|htm|s?html|php|pl|jsp|cfm)", "/");
+
+                app.UseRewriter(options);
             }
             catch (Exception e)
             {

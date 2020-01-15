@@ -30,7 +30,7 @@ namespace Moonglade.Web.Controllers
             ILogger<CommentController> logger,
             IOptions<AppSettings> settings,
             CommentService commentService,
-            IBlogConfig blogConfig, 
+            IBlogConfig blogConfig,
             IMoongladeNotificationClient notificationClient = null)
             : base(logger, settings)
         {
@@ -51,7 +51,7 @@ namespace Moonglade.Web.Controllers
                     // Validate BasicCaptcha Code
                     if (!captcha.ValidateCaptchaCode(model.NewCommentViewModel.CaptchaCode, HttpContext.Session))
                     {
-                        Logger.LogWarning($"Wrong Captcha Code, model: {JsonSerializer.Serialize(model.NewCommentViewModel)}");
+                        Logger.LogWarning("Wrong Captcha Code");
                         ModelState.AddModelError(nameof(model.NewCommentViewModel.CaptchaCode), "Wrong Captcha Code");
 
                         Response.StatusCode = (int)HttpStatusCode.BadRequest;
@@ -75,10 +75,14 @@ namespace Moonglade.Web.Controllers
                         {
                             _ = Task.Run(async () =>
                               {
-                                  await _notificationClient.SendNewCommentNotificationAsync(response.Item, Utils.MdContentToHtml);
+                                  await _notificationClient.SendNewCommentNotificationAsync(response.Item, s => Utils.ConvertMarkdownContent(s, Utils.MarkdownConvertType.Html));
                               });
                         }
-                        var cResponse = new CommentResponse(true, CommentResponseCode.Success);
+                        var cResponse = new CommentResponse(true,
+                            _blogConfig.ContentSettings.RequireCommentReview ?
+                            CommentResponseCode.Success :
+                            CommentResponseCode.SuccessNonReview);
+
                         return Json(cResponse);
                     }
 
@@ -129,12 +133,13 @@ namespace Moonglade.Web.Controllers
 
         public enum CommentResponseCode
         {
-            Success,
-            UnknownError,
-            WrongCaptcha,
-            EmailDomainBlocked,
-            CommentDisabled,
-            InvalidModel
+            Success = 100,
+            SuccessNonReview = 101,
+            UnknownError = 200,
+            WrongCaptcha = 300,
+            EmailDomainBlocked = 400,
+            CommentDisabled = 500,
+            InvalidModel = 600
         }
     }
 }

@@ -1,11 +1,6 @@
-﻿@using Microsoft.Extensions.Options
-@using Moonglade.Configuration.Abstraction
-@using Moonglade.Core
-@using Moonglade.Model.Settings
-@inject IOptions<AppSettings> Settings
-@inject IBlogConfig BlogConfig
+﻿@using Moonglade.Core
 
-<footer>
+<footer id="moonglade-footer" class="bg-moonglade-accent2">
     <div class="container">
         <div class="row">
             <div class="col-md-3 col-sm-3">
@@ -16,11 +11,6 @@
                 <div class="mb-2">Designed and Developed by Edi Wang</div>
                 <small>
                     Powered by <a href="https://github.com/EdiWang/Moonglade" target="_blank">Moonglade</a> @Utils.AppVersion
-                </small>
-                <br />
-                <small>
-                    <span class="icon-link"></span>
-                    <a asp-action="Index" asp-controller="Admin">Admin</a>
                 </small>
             </div>
 

@@ -1,7 +1,4 @@
-﻿@using Moonglade.Configuration.Abstraction
-@model X.PagedList.StaticPagedList<Moonglade.Model.PostListItem>
-
-@inject IBlogConfig BlogConfig
+﻿@model X.PagedList.StaticPagedList<Moonglade.Model.PostListItem>
 
 @{
     ViewBag.TitlePrefix = ViewBag.CategoryDisplayName + " - " + BlogConfig.GeneralSettings.SiteTitle;
@@ -18,7 +15,6 @@
         <span class="icon-rss"></span>
     </a>
     <span>@ViewBag.CategoryDisplayName</span>
-    <span class="badge d-inline d-sm-none float-right">@Model.TotalItemCount</span>
     <small class="d-none d-md-inline text-muted">@ViewBag.CategoryDescription</small>
 </h3>
 <hr />

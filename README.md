@@ -12,33 +12,31 @@ The blog system for https://edi.wang. Written in C# on [**.NET Core**](https://d
 
 **Misc:** Pingback, RSS/Atom/OPML, Open Search, Reader View
 
-## Caveats
-
-This is **NOT a general purpose blog system** like WordPress or other CMS. Currently it contains content "hard coded" for https://edi.wang. To make it yours, you will need to change a certain amount of code.
-
 ## Build and Run
 
 > The following tools are required for development.
 
 Tools | Alternative
 --- | ---
-[.NET Core 3.0 SDK](http://dot.net) | N/A
+[.NET Core 3.1 SDK](http://dot.net) | N/A
 [Visual Studio 2019](https://visualstudio.microsoft.com/) | [Visual Studio Code](https://code.visualstudio.com/)
-[Azure SQL Database](https://azure.microsoft.com/en-us/services/sql-database/) | [SQL Server 2017](https://www.microsoft.com/en-us/sql-server/sql-server-2017) / LocalDB (Dev Only)
+[Azure SQL Database](https://azure.microsoft.com/en-us/services/sql-database/) | [SQL Server 2019](https://www.microsoft.com/en-us/sql-server/sql-server-2019) / LocalDB (Dev Only)
 
 ### Setup Database
 
 #### 1. Create Database 
 
-##### For Development (Light Weight, Recommended for Windows)
+##### Development
 
-Create an [SQL Server 2017 LocalDB](https://docs.microsoft.com/en-us/sql/database-engine/configure-windows/sql-server-express-localdb?view=sql-server-2017) database. e.g. moonglade-dev
+Create an [SQL Server 2019 LocalDB](https://docs.microsoft.com/en-us/sql/database-engine/configure-windows/sql-server-express-localdb?WT.mc_id=AZ-MVP-5002809&view=sql-server-ver15) database. e.g. **moonglade-dev**
 
-##### For Production
+##### Production
 
-[Create an Azure SQL Database](https://docs.microsoft.com/en-us/azure/sql-database/sql-database-single-database-get-started) or a SQL Server 2017+ database. e.g. moonglade-dev
+[Create an Azure SQL Database](https://docs.microsoft.com/en-us/azure/sql-database/sql-database-single-database-get-started?WT.mc_id=AZ-MVP-5002809) or a SQL Server 2019 database. e.g. **moonglade-production**
 
 #### 2. Set Connection String
+
+##### Via configuration file
 
 Update the connection string "**MoongladeDatabase**" in **appsettings.[env].json** according to your database configuration.
 
@@ -49,7 +47,9 @@ Example:
 }
 ```
 
-*The blog will automatically setup datbase schema and initial data in first run*
+##### Via environment variable (Recommend for production)
+
+Set environment variable: ```ConnectionStrings__MoongladeDatabase``` to your connection string. If you are deploying to Azure App Service, you can set the connection string in the Configuration blade.
 
 ### Build Source
 
@@ -69,7 +69,8 @@ Configure how to sign in to admin portal.
 
 Register an App in **Azure Active Directory**
 - Set Redirection URI to **"https://yourdomain/signin-oidc"**
-  - For local debugging, set URL to https://localhost:5001/signin-oidc
+  - For local debugging, add URL to https://localhost:1055/signin-oidc
+- Check `ID Tokens` checkbox under 'Advanced settings'.
 - Copy "**appId**" to set as **AzureAd:ClientId** in **appsettings.[env].json** file
 
 ```json
@@ -128,6 +129,8 @@ The **Path** can be relative or absolute. **"$\{basedir\}"** represents the webs
 
 If **GetImageByCDNRedirect** is set to **true**, the blog will get images from client browser using a 302 redirect, not by fetching images in backend and put into memory cache. This is especially useful when you have a CDN for your image resources, like what I did on Azure. 
 
+> Note: Azure CDN is extremely slow under China Telecom and China Mobile network, if you are operating in China, please use a local CDN provider.
+
 ```json
 "CDNSettings": {
     "GetImageByCDNRedirect": true,
@@ -165,34 +168,23 @@ To customize robots.txt, modify the configuration under **RobotsTxt** section.
 
 Key | Description
 --- | ---
+Editor | HTML / Markdown
 CaptchaSettings:ImageWidth | Pixel Width of Captcha Image
 CaptchaSettings.ImageHeight | Pixel Height of Captcha Image
-TimeZone | The blog owner's current time zone (relative to UTC)
-PostSummaryWords | How may words to show in post list summary
+PostAbstractWords | How may words to show in post list abstract
 ImageCacheSlidingExpirationMinutes | Time for cached images to expire
-EnableImageLazyLoad | Use lazy load to show images when user scrolls the page
-EnablePingBackReceive | Can blog receive pingback requests
-EnablePingBackSend | Can blog send pingback to another blog
 EnforceHttps | Force website use HTTPS
-DisableEmailSendingInDevelopment | When debugging locally, do not send email for real
-DNSPrefetchEndpoint | Add HTML head named "dns-prefetch"
 AllowScriptsInCustomPage | Allow JavaScript in Page content or not
 
 ## FAQ
 
 ### Does this blog support upgrade from a lower version?
 
-Not yet. Currently it depends on whether the database schema is changed. If the schema is same for a higer version, then the system can be deployed and override old files without problem.
+It depends. If the database schema is same for a higer version, then the system can be deployed and override old files without problem.
 
 ### Does this blog coupled with Microsoft Azure?
 
 No, the system design does not couple with Azure, but the blog works best on Azure. Every part of the system, like Authentication and Image Storage, can be configured to use non-Azure options.
-
-## Optional Recommendations
-- [Microsoft Azure DNS Zones](https://azure.microsoft.com/en-us/services/dns/)
-- [Microsoft Azure App Service](https://azure.microsoft.com/en-us/services/app-service/)
-- [Microsoft Azure SQL Database](https://azure.microsoft.com/en-us/services/sql-database/)
-- [Microsoft Azure Blob Storage](https://azure.microsoft.com/en-us/services/storage/blobs/)
 
 ## Related Projects
 

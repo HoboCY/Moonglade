@@ -18,7 +18,7 @@ var postEditor = {
                 selector: textareaSelector,
                 themes: 'silver',
                 skin: 'oxide',
-                height: 650,
+                //height: 650,
                 relative_urls: false, // avoid image upload fuck up
                 browser_spellcheck: true,
                 branding: false,
@@ -47,6 +47,37 @@ var postEditor = {
             });
         }
     },
+    loadMdEditor: function (textareaSelector) {
+        if (window.SimpleMDE) {
+            var simplemde = new SimpleMDE({
+                element: $(textareaSelector)[0],
+                spellChecker: false,
+                status: false
+            });
+
+            inlineAttachment.editors.codemirror4.attach(simplemde.codemirror, {
+                uploadUrl: '/image/upload',
+                urlText: "![file](/uploads/{filename})",
+                onFileUploadResponse: function (xhr) {
+                    var result = JSON.parse(xhr.responseText),
+                        filename = result[this.settings.jsonFieldName];
+
+                    if (result && filename) {
+                        var newValue;
+                        if (typeof this.settings.urlText === 'function') {
+                            newValue = this.settings.urlText.call(this, filename, result);
+                        } else {
+                            newValue = this.settings.urlText.replace(this.filenameTag, filename);
+                        }
+                        var text = this.editor.getValue().replace(this.lastValue, newValue);
+                        this.editor.setValue(text);
+                        this.settings.onFileUploaded.call(this, filename);
+                    }
+                    return false;
+                }
+            });
+        }
+    },
     initEvents: function () {
         $('#Title').change(function () {
             $('#Slug').val(slugify($(this).val()));
@@ -72,6 +103,15 @@ var postEditor = {
                 displayKey: 'name',
                 valueKey: 'name',
                 source: tagnames.ttAdapter()
+            },
+            trimValue: true
+        });
+
+        $('#Tags').on('beforeItemAdd', function (event) {
+            if (!/^[a-zA-Z 0-9\.\-\+\#\s]*$/i.test(event.item)) {
+                console.warn(`Invalid tag name: ${event.item}`);
+                toastr.warning(`Invalid tag name: ${event.item}`);
+                event.cancel = true;
             }
         });
 
@@ -94,7 +134,9 @@ var postEditor = {
         });
 
         function submitForm(e) {
-            window.tinyMCE.triggerSave();
+            if (window.tinyMCE) {
+                window.tinyMCE.triggerSave();
+            }
 
             var selectCatCount = 0;
             $('input[name="SelectedCategoryIds"]').each(function () {

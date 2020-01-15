@@ -1,5 +1,5 @@
 ﻿@{
-    string currentAction = ViewContext.RouteData?.Values["action"]?.ToString();
+    var currentAction = ViewContext.RouteData?.Values["action"]?.ToString();
 }
 
 <h3>
@@ -28,6 +28,9 @@
     </li>
     <li role="presentation" class="nav-item nav-item-non-margin">
         <a class="nav-link @(currentAction == "AdvancedSettings" ? "active" : null)" asp-controller="Settings" asp-action="AdvancedSettings">Advanced</a>
+    </li>
+    <li role="presentation" class="nav-item nav-item-non-margin">
+        <a class="nav-link @(currentAction == "About" ? "active" : null)" asp-controller="Settings" asp-action="About">About</a>
     </li>
 </ul>
 <div class="mb-3"></div>

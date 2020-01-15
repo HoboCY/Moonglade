@@ -10,14 +10,25 @@ namespace Moonglade.Configuration
 
         public string MetaKeyword { get; set; }
 
+        public string MetaDescription { get; set; }
+
         public string Copyright { get; set; }
 
         public string SideBarCustomizedHtmlPitch { get; set; }
 
         public string FooterCustomizedHtmlPitch { get; set; }
 
-        public bool ShowCalloutSection { get; set; }
+        // Use string instead of TimeSpan as workaround for System.Text.Json issue
+        // https://github.com/EdiWang/Moonglade/issues/310
+        public string TimeZoneUtcOffset { get; set; }
 
-        public string CalloutSectionHtmlPitch { get; set; }
+        public string TimeZoneId { get; set; }
+
+        public string ThemeFileName { get; set; }
+
+        public GeneralSettings()
+        {
+            ThemeFileName = "word-blue.css";
+        }
     }
 }
