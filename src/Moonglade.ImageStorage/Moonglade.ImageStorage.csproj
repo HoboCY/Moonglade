@@ -1,13 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\MoongladeCommon.props" />
+
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
-    <AssemblyVersion>10.1.0.0</AssemblyVersion>
-    <Version>10.1.0</Version>
-    <Authors>Edi Wang</Authors>
-    <Company>edi.wang</Company>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Edi.Practice.RequestResponseModel" Version="1.3.3" />
+    <PackageReference Include="Edi.Practice.RequestResponseModel" Version="1.3.4" />
   </ItemGroup>
 </Project>

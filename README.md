@@ -4,7 +4,7 @@
 
 The blog system for https://edi.wang. Written in C# on [**.NET Core**](https://dotnet.microsoft.com/) and runs on [**Microsoft Azure**](https://azure.microsoft.com/en-us/).
 
-![image](https://cdn-blob.edi.wang/web-assets/ediwang-azure-arch-v2.png)
+![image](https://blog.ediwangcdn.com/web-assets/ediwang-azure-arch-v2.png)
 
 ## Features
 
@@ -157,12 +157,6 @@ Set values in AppSettings:
   "ApiKey": "{PROD-ENV-VARIABLE}"
 }
 ```
-
-### Robots.txt
-
-This blog generates robots.txt based on configuration. However, if there are a physical file named "robots.txt" under "wwwroot" directory, it will override the configuration based robots.txt generation.
-
-To customize robots.txt, modify the configuration under **RobotsTxt** section.
 
 ### Others
 

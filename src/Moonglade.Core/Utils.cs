@@ -9,7 +9,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Edi.Practice.RequestResponseModel;
 using Markdig;
-using TimeZoneConverter;
 
 namespace Moonglade.Core
 {
@@ -179,41 +178,6 @@ namespace Moonglade.Core
             path = path.Trim();
 
             return url.TrimEnd('/') + "/" + path.TrimStart('/');
-        }
-
-        public static IEnumerable<TimeZoneInfo> GetTimeZones()
-        {
-            return TimeZoneInfo.GetSystemTimeZones();
-        }
-
-        public static TimeSpan GetTimeSpanByZoneId(string timeZoneId)
-        {
-            if (string.IsNullOrWhiteSpace(timeZoneId))
-            {
-                return TimeSpan.Zero;
-            }
-
-            // Reference: https://devblogs.microsoft.com/dotnet/cross-platform-time-zones-with-net-core/
-            var tz = TZConvert.GetTimeZoneInfo(timeZoneId);
-            return tz.BaseUtcOffset;
-        }
-
-        public static DateTime UtcToZoneTime(DateTime utcTime, string timeSpan)
-        {
-            if (string.IsNullOrWhiteSpace(timeSpan))
-            {
-                timeSpan = TimeSpan.FromSeconds(0).ToString();
-            }
-
-            // Ugly code for workaround https://github.com/EdiWang/Moonglade/issues/310
-            var ok = TimeSpan.TryParse(timeSpan, out var span);
-            if (!ok)
-            {
-                throw new FormatException($"{nameof(timeSpan)} is not a valid TimeSpan format");
-            }
-
-            var tz = GetTimeZones().FirstOrDefault(t => t.BaseUtcOffset == span);
-            return null != tz ? TimeZoneInfo.ConvertTimeFromUtc(utcTime, tz) : utcTime.AddTicks(span.Ticks);
         }
 
         public static string GetPostAbstract(string rawContent, int wordCount, bool useMarkdown = false)

@@ -37,7 +37,6 @@ using Moonglade.Web.Extensions;
 using Moonglade.Web.FaviconGenerator;
 using Moonglade.Web.Filters;
 using Moonglade.Web.Middleware.PoweredBy;
-using Moonglade.Web.Middleware.RobotsTxt;
 using Polly;
 
 namespace Moonglade.Web
@@ -63,7 +62,6 @@ namespace Moonglade.Web
             services.AddRateLimit(_configuration.GetSection("IpRateLimiting"));
 
             services.Configure<AppSettings>(_appSettingsSection);
-            services.Configure<RobotsTxtOptions>(_configuration.GetSection("RobotsTxt"));
 
             var authentication = new AuthenticationSettings();
             _configuration.Bind(nameof(Authentication), authentication);
@@ -97,6 +95,7 @@ namespace Moonglade.Web
             services.AddSingleton<IBlogConfig, BlogConfig>();
             services.AddScoped<DeleteSubscriptionCache>();
             services.AddScoped<IHtmlCodec, MoongladeHtmlCodec>();
+            services.AddScoped<IDateTimeResolver, DateTimeResolver>();
             services.AddScoped<IPingbackSender, PingbackSender>();
             services.AddScoped<IPingbackReceiver, PingbackReceiver>();
             services.AddScoped<IFileSystemOpmlWriter, FileSystemOpmlWriter>();
@@ -226,15 +225,6 @@ namespace Moonglade.Web
 
             app.UseStaticFiles();
             app.UseSession();
-
-            app.UseRobotsTxt();
-            //app.UseRobotsTxt(builder =>
-            //builder.AddSection(section =>
-            //        section.SetComment("Allow Googlebot")
-            //               .SetUserAgent("Googlebot")
-            //               .Allow("/"))
-            ////.AddSitemap("https://example.com/sitemap.xml")
-            //);
 
             var conn = _configuration.GetConnectionString(Constants.DbConnectionName);
             var setupHelper = new SetupHelper(conn);
