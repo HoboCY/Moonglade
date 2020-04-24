@@ -11,9 +11,7 @@ namespace Moonglade.Web
     {
         public static void Main(string[] args)
         {
-            var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-            var isProd = environment == Environments.Production;
-            var logger = NLogBuilder.ConfigureNLog(isProd ? "nlog.config" : "nlog.debug.config").GetCurrentClassLogger();
+            var logger = NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
             try
             {
                 logger.Info($"Moonglade Version {Utils.AppVersion}\n" +
@@ -44,7 +42,16 @@ namespace Moonglade.Web
                               .ConfigureLogging(logging =>
                               {
                                   logging.SetMinimumLevel(LogLevel.Trace);
-                              }).UseNLog();
+                              });
+
+                    bool runsInDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
+                    if (!runsInDocker)
+                    {
+                        // Because NLog may not be able to write files and find correct directory in a docker conatiner
+                        // So only non-container environments are enabled for NLog
+                        // Docker can still use Console log
+                        webBuilder.UseNLog();
+                    }
                 });
     }
 }

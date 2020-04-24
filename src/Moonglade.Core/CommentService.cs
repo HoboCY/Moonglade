@@ -7,12 +7,14 @@ using Edi.Practice.RequestResponseModel;
 using Edi.WordFilter;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moonglade.Auditing;
 using Moonglade.Configuration.Abstraction;
 using Moonglade.Data.Entities;
 using Moonglade.Data.Infrastructure;
 using Moonglade.Data.Spec;
 using Moonglade.Model;
 using Moonglade.Model.Settings;
+using EventId = Moonglade.Auditing.EventId;
 
 namespace Moonglade.Core
 {
@@ -23,6 +25,7 @@ namespace Moonglade.Core
         private readonly IRepository<PostEntity> _postRepository;
         private readonly IRepository<CommentEntity> _commentRepository;
         private readonly IRepository<CommentReplyEntity> _commentReplyRepository;
+        private readonly IMoongladeAudit _moongladeAudit;
 
         public CommentService(
             ILogger<CommentService> logger,
@@ -30,13 +33,15 @@ namespace Moonglade.Core
             IBlogConfig blogConfig,
             IRepository<CommentEntity> commentRepository,
             IRepository<CommentReplyEntity> commentReplyRepository,
-            IRepository<PostEntity> postRepository) : base(logger, settings)
+            IRepository<PostEntity> postRepository,
+            IMoongladeAudit moongladeAudit) : base(logger, settings)
         {
             _blogConfig = blogConfig;
 
             _commentRepository = commentRepository;
             _commentReplyRepository = commentReplyRepository;
             _postRepository = postRepository;
+            _moongladeAudit = moongladeAudit;
         }
 
         public int CountComments()
@@ -46,7 +51,7 @@ namespace Moonglade.Core
 
         public Task<IReadOnlyList<PostCommentListItem>> GetSelectedCommentsOfPostAsync(Guid postId)
         {
-            return _commentRepository.SelectAsync(new CommentSepc(postId), c => new PostCommentListItem
+            return _commentRepository.SelectAsync(new CommentSpec(postId), c => new PostCommentListItem
             {
                 CommentContent = c.CommentContent,
                 CreateOnUtc = c.CreateOnUtc,
@@ -69,7 +74,7 @@ namespace Moonglade.Core
                     throw new ArgumentOutOfRangeException(nameof(pageSize), $"{nameof(pageSize)} can not be less than 1.");
                 }
 
-                var spec = new CommentSepc(pageSize, pageIndex);
+                var spec = new CommentSpec(pageSize, pageIndex);
                 var comments = await _commentRepository.SelectAsync(spec, p => new CommentListItem
                 {
                     Id = p.Id,
@@ -91,7 +96,7 @@ namespace Moonglade.Core
             });
         }
 
-        public Task<Response> ToggleCommentApprovalStatus(Guid[] commentIds)
+        public Task<Response> ToggleApprovalStatusAsync(Guid[] commentIds)
         {
             return TryExecuteAsync(async () =>
             {
@@ -100,24 +105,33 @@ namespace Moonglade.Core
                     throw new ArgumentNullException(nameof(commentIds));
                 }
 
-                var spec = new CommentSepc(commentIds);
+                var spec = new CommentSpec(commentIds);
                 var comments = await _commentRepository.GetAsync(spec);
                 foreach (var cmt in comments)
                 {
                     cmt.IsApproved = !cmt.IsApproved;
                     await _commentRepository.UpdateAsync(cmt);
-                    Logger.LogInformation($"Updated comment approval status to '{cmt.IsApproved}' for comment id: '{cmt.Id}'");
+
+                    string logMessage = $"Updated comment approval status to '{cmt.IsApproved}' for comment id: '{cmt.Id}'";
+                    Logger.LogInformation(logMessage);
+                    await _moongladeAudit.AddAuditEntry(
+                        EventType.Content, cmt.IsApproved ? EventId.CommentApproval : EventId.CommentDisapproval, logMessage);
                 }
 
                 return new SuccessResponse();
             });
         }
 
-        public Task<Response> DeleteComments(Guid[] commentIds)
+        public Task<Response> DeleteCommentsAsync(Guid[] commentIds)
         {
             return TryExecuteAsync(async () =>
             {
-                var spec = new CommentSepc(commentIds);
+                if (null == commentIds || !commentIds.Any())
+                {
+                    throw new ArgumentNullException(nameof(commentIds));
+                }
+
+                var spec = new CommentSpec(commentIds);
                 var comments = await _commentRepository.GetAsync(spec);
                 foreach (var cmt in comments)
                 {
@@ -126,12 +140,11 @@ namespace Moonglade.Core
                     if (cReplies.Any())
                     {
                         _commentReplyRepository.Delete(cReplies);
-                        Logger.LogInformation($"Deleted comment replies under comment id: '{cmt.Id}'");
                     }
 
                     // 2. Delete comment itself
                     _commentRepository.Delete(cmt);
-                    Logger.LogInformation($"Deleted comment id: '{cmt.Id}'");
+                    await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.CommentDeleted, $"Comment '{cmt.Id}' deleted.");
                 }
 
                 return new SuccessResponse();
@@ -203,9 +216,9 @@ namespace Moonglade.Core
             });
         }
 
-        public Response<CommentReplyDetail> AddReply(Guid commentId, string replyContent, string ipAddress, string userAgent)
+        public Task<Response<CommentReplyDetail>> AddReply(Guid commentId, string replyContent, string ipAddress, string userAgent)
         {
-            return TryExecute<CommentReplyDetail>(() =>
+            return TryExecuteAsync<CommentReplyDetail>(async () =>
             {
                 if (!_blogConfig.ContentSettings.EnableComments)
                 {
@@ -242,12 +255,14 @@ namespace Moonglade.Core
                     PostId = cmt.PostId,
                     PubDateUtc = cmt.Post.PostPublish.PubDateUtc.GetValueOrDefault(),
                     ReplyContent = model.ReplyContent,
+                    ReplyContentHtml = Utils.ConvertMarkdownContent(model.ReplyContent, Utils.MarkdownConvertType.Html),
                     ReplyTimeUtc = model.ReplyTimeUtc,
                     Slug = cmt.Post.Slug,
                     Title = cmt.Post.Title,
                     UserAgent = model.UserAgent
                 };
 
+                await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.CommentReplied, $"Replied comment id '{commentId}'");
                 return new SuccessResponse<CommentReplyDetail>(detail);
             });
         }

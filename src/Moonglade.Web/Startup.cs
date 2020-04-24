@@ -4,8 +4,6 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using AspNetCoreRateLimit;
-using Edi.Blog.OpmlFileWriter;
-using Edi.Blog.Pingback;
 using Edi.Captcha;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.ApplicationInsights.Extensibility.Implementation;
@@ -21,22 +19,26 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Moonglade.Auditing;
 using Moonglade.Configuration;
 using Moonglade.Configuration.Abstraction;
 using Moonglade.Core;
 using Moonglade.Core.Notification;
 using Moonglade.Data;
 using Moonglade.Data.Infrastructure;
-using Moonglade.HtmlCodec;
+using Moonglade.DateTimeOps;
+using Moonglade.HtmlEncoding;
 using Moonglade.ImageStorage;
 using Moonglade.Model;
 using Moonglade.Model.Settings;
+using Moonglade.OpmlFileWriter;
+using Moonglade.Pingback;
 using Moonglade.Setup;
 using Moonglade.Web.Authentication;
 using Moonglade.Web.Extensions;
-using Moonglade.Web.FaviconGenerator;
 using Moonglade.Web.Filters;
 using Moonglade.Web.Middleware.PoweredBy;
+using Moonglade.Web.SiteIconGenerator;
 using Polly;
 
 namespace Moonglade.Web
@@ -93,9 +95,13 @@ namespace Moonglade.Web
             services.AddScoped(typeof(IRepository<>), typeof(DbContextRepository<>));
             services.TryAddSingleton<IActionContextAccessor, ActionContextAccessor>();
             services.AddSingleton<IBlogConfig, BlogConfig>();
+            services.AddScoped<IMoongladeAudit, MoongladeAudit>();
             services.AddScoped<DeleteSubscriptionCache>();
-            services.AddScoped<IHtmlCodec, MoongladeHtmlCodec>();
-            services.AddScoped<IDateTimeResolver, DateTimeResolver>();
+            services.AddScoped<IHtmlCodec, HtmlCodec>();
+            services.AddScoped<ISiteIconGenerator, FileSystemSiteIconGenerator>();
+            services.AddScoped<IDateTimeResolver>(c =>
+                new DateTimeResolver(c.GetService<IBlogConfig>().GeneralSettings.TimeZoneUtcOffset));
+
             services.AddScoped<IPingbackSender, PingbackSender>();
             services.AddScoped<IPingbackReceiver, PingbackReceiver>();
             services.AddScoped<IFileSystemOpmlWriter, FileSystemOpmlWriter>();
@@ -112,17 +118,14 @@ namespace Moonglade.Web
                 }
             }
 
-            if (bool.Parse(_appSettingsSection["Notification:Enabled"]))
-            {
-                services.AddHttpClient<IMoongladeNotificationClient, NotificationClient>()
-                        .AddTransientHttpErrorPolicy(builder =>
-                                builder.WaitAndRetryAsync(3, retryCount =>
-                                TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
-                                    (result, span, retryCount, context) =>
-                                    {
-                                        _logger?.LogWarning($"Request failed with {result.Result.StatusCode}. Waiting {span} before next retry. Retry attempt {retryCount}/3.");
-                                    }));
-            }
+            services.AddHttpClient<IMoongladeNotificationClient, NotificationClient>()
+                    .AddTransientHttpErrorPolicy(builder =>
+                            builder.WaitAndRetryAsync(3, retryCount =>
+                            TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
+                                (result, span, retryCount, context) =>
+                                {
+                                    _logger?.LogWarning($"Request failed with {result.Result.StatusCode}. Waiting {span} before next retry. Retry attempt {retryCount}/3.");
+                                }));
 
             services.AddDbContext<MoongladeDbContext>(options =>
                     options.UseLazyLoadingProxies()
@@ -157,7 +160,6 @@ namespace Moonglade.Web
             });
 
             PrepareRuntimePathDependencies(app, _environment);
-            GenerateFavicons(_environment);
 
             var enforceHttps = bool.Parse(_appSettingsSection["EnforceHttps"]);
 
@@ -264,10 +266,11 @@ namespace Moonglade.Web
                 }
 
                 app.UseIpRateLimiting();
-                app.MapWhen(context => context.Request.Path == "/version", builder =>
+                app.MapWhen(context => context.Request.Path == "/ping", builder =>
                 {
                     builder.Run(async context =>
                     {
+                        context.Response.Headers.Add("X-Moonglade-Version", Utils.AppVersion);
                         await context.Response.WriteAsync($"Moonglade Version: {Utils.AppVersion}, .NET Core {Environment.Version}", Encoding.UTF8);
                     });
                 });
@@ -288,24 +291,6 @@ namespace Moonglade.Web
 
         #region Private Helpers
 
-        private void GenerateFavicons(IHostEnvironment env)
-        {
-            try
-            {
-                IFaviconGenerator faviconGenerator = new FileSystemFaviconGenerator();
-                var userDefinedIconFile = Path.Combine(env.ContentRootPath, @"wwwroot\appicon.png");
-                if (File.Exists(userDefinedIconFile))
-                {
-                    faviconGenerator.GenerateIcons(userDefinedIconFile,
-                        Path.Combine(AppDomain.CurrentDomain.GetData(Constants.DataDirectory).ToString(), "favicons"));
-                }
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Error generating favicons.");
-            }
-        }
-
         private void PrepareRuntimePathDependencies(IApplicationBuilder app, IHostEnvironment env)
         {
             void DeleteDataFile(string path)
@@ -325,8 +310,8 @@ namespace Moonglade.Web
 
             void CleanDataCache()
             {
-                var openSearchDataFile = $@"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}\{Constants.OpenSearchFileName}";
-                var opmlDataFile = $@"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}\{Constants.OpmlFileName}";
+                var openSearchDataFile = Path.Join($"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}", $"{Constants.OpenSearchFileName}");
+                var opmlDataFile = Path.Join($"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}", $"{Constants.OpmlFileName}");
 
                 DeleteDataFile(openSearchDataFile);
                 DeleteDataFile(opmlDataFile);
@@ -341,7 +326,7 @@ namespace Moonglade.Web
             // e.g. Azure Deployment using WEBSITE_RUN_FROM_PACKAGE will make website root directory read only.
             var tPath = Path.GetTempPath();
             _logger.LogInformation($"Server environment Temp path: {tPath}");
-            var moongladeAppDataPath = Path.Combine(tPath, @"moonglade\App_Data");
+            var moongladeAppDataPath = Path.Join(tPath, "moonglade", "App_Data");
             if (Directory.Exists(moongladeAppDataPath))
             {
                 Directory.Delete(moongladeAppDataPath, true);
@@ -351,7 +336,7 @@ namespace Moonglade.Web
             AppDomain.CurrentDomain.SetData(Constants.DataDirectory, moongladeAppDataPath);
             _logger.LogInformation($"Created Application Data path: {moongladeAppDataPath}");
 
-            var feedDirectoryPath = $@"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}\feed";
+            var feedDirectoryPath = Path.Join($"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}", "feed");
             if (!Directory.Exists(feedDirectoryPath))
             {
                 Directory.CreateDirectory(feedDirectoryPath);

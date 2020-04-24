@@ -1,13 +1,15 @@
 ﻿using System;
 using System.Threading.Tasks;
-using Edi.Blog.Pingback.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moonglade.Auditing;
 using Moonglade.Configuration.Abstraction;
 using Moonglade.Core;
 using Moonglade.Model.Settings;
+using Moonglade.Pingback.Mvc;
+using EventId = Moonglade.Auditing.EventId;
 
 namespace Moonglade.Web.Controllers
 {
@@ -38,7 +40,7 @@ namespace Moonglade.Web.Controllers
                 return Forbid();
             }
 
-            var response = await _pingbackService.ProcessReceivedPingback(HttpContext);
+            var response = await _pingbackService.ProcessReceivedPingbackAsync(HttpContext);
             Logger.LogInformation($"Pingback Processor Response: {response.ToString()}");
             return new PingbackResult(response);
         }
@@ -53,9 +55,15 @@ namespace Moonglade.Web.Controllers
 
         [Authorize]
         [HttpPost("delete")]
-        public IActionResult Delete(Guid pingbackId)
+        public async Task<IActionResult> Delete(Guid pingbackId, [FromServices] IMoongladeAudit moongladeAudit)
         {
-            return _pingbackService.DeleteReceivedPingback(pingbackId).IsSuccess ? Json(pingbackId) : Json(null);
+            if (_pingbackService.DeleteReceivedPingback(pingbackId).IsSuccess)
+            {
+                await moongladeAudit.AddAuditEntry(EventType.Content, EventId.PingbackDeleted,
+                    $"Pingback '{pingbackId}' deleted.");
+                return Json(pingbackId);
+            }
+            return Json(null);
         }
     }
 }

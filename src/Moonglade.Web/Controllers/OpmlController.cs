@@ -1,13 +1,12 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Edi.Blog.OpmlFileWriter;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moonglade.Configuration.Abstraction;
 using Moonglade.Core;
 using Moonglade.Model;
+using Moonglade.OpmlFileWriter;
 
 namespace Moonglade.Web.Controllers
 {
@@ -32,14 +31,14 @@ namespace Moonglade.Web.Controllers
 
         public async Task<IActionResult> Index()
         {
-            var feedDirectoryPath = $@"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}\feed";
+            var feedDirectoryPath = Path.Join($"{SiteDataDirectory}", "feed");
             if (!Directory.Exists(feedDirectoryPath))
             {
                 Directory.CreateDirectory(feedDirectoryPath);
                 Logger.LogInformation($"Created directory '{feedDirectoryPath}'");
             }
 
-            var opmlDataFile = $@"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}\{Constants.OpmlFileName}";
+            var opmlDataFile = Path.Join($"{SiteDataDirectory}", $"{Constants.OpmlFileName}");
             if (!System.IO.File.Exists(opmlDataFile))
             {
                 Logger.LogInformation($"OPML file not found, writing new file on {opmlDataFile}");
@@ -60,14 +59,14 @@ namespace Moonglade.Web.Controllers
                 {
                     SiteTitle = $"{_blogConfig.GeneralSettings.SiteTitle} - OPML",
                     CategoryInfo = catInfos,
-                    HtmlUrl = $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}/post",
-                    XmlUrl = $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}/rss",
-                    CategoryXmlUrlTemplate = $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}/rss/category/[catTitle]",
-                    CategoryHtmlUrlTemplate = $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}/category/list/[catTitle]"
+                    HtmlUrl = $"{SiteRootUrl}/post",
+                    XmlUrl = $"{SiteRootUrl}/rss",
+                    CategoryXmlUrlTemplate = $"{SiteRootUrl}/rss/category/[catTitle]",
+                    CategoryHtmlUrlTemplate = $"{SiteRootUrl}/category/list/[catTitle]"
                 };
 
-                await _fileSystemOpmlWriter.WriteOpmlFileAsync(
-                    $@"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}\{Constants.OpmlFileName}", oi);
+                var path = Path.Join($"{SiteDataDirectory}", $"{Constants.OpmlFileName}");
+                await _fileSystemOpmlWriter.WriteOpmlFileAsync(path, oi);
                 Logger.LogInformation("OPML file write completed.");
 
                 if (!System.IO.File.Exists(opmlDataFile))

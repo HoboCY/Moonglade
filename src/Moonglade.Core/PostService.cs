@@ -5,13 +5,16 @@ using System.Threading.Tasks;
 using Edi.Practice.RequestResponseModel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moonglade.Auditing;
 using Moonglade.Configuration.Abstraction;
 using Moonglade.Data.Entities;
 using Moonglade.Data.Infrastructure;
 using Moonglade.Data.Spec;
-using Moonglade.HtmlCodec;
+using Moonglade.DateTimeOps;
+using Moonglade.HtmlEncoding;
 using Moonglade.Model;
 using Moonglade.Model.Settings;
+using EventId = Moonglade.Auditing.EventId;
 
 namespace Moonglade.Core
 {
@@ -20,6 +23,7 @@ namespace Moonglade.Core
         private readonly IHtmlCodec _htmlCodec;
         private readonly IBlogConfig _blogConfig;
         private readonly IDateTimeResolver _dateTimeResolver;
+        private readonly IMoongladeAudit _moongladeAudit;
 
         #region Repository Objects
 
@@ -43,8 +47,9 @@ namespace Moonglade.Core
             IRepository<CategoryEntity> categoryRepository,
             IRepository<PostCategoryEntity> postCategoryRepository,
             IHtmlCodec htmlCodec,
-            IBlogConfig blogConfig, 
-            IDateTimeResolver dateTimeResolver) : base(logger, settings)
+            IBlogConfig blogConfig,
+            IDateTimeResolver dateTimeResolver,
+            IMoongladeAudit moongladeAudit) : base(logger, settings)
         {
             _postRepository = postRepository;
             _postExtensionRepository = postExtensionRepository;
@@ -56,6 +61,7 @@ namespace Moonglade.Core
             _htmlCodec = htmlCodec;
             _blogConfig = blogConfig;
             _dateTimeResolver = dateTimeResolver;
+            _moongladeAudit = moongladeAudit;
         }
 
         public Response<int> CountVisiblePosts()
@@ -98,7 +104,7 @@ namespace Moonglade.Core
             });
         }
 
-        public Task<Response> UpdatePostStatisticAsync(Guid postId, StatisticTypes statisticTypes)
+        public Task<Response> UpdateStatisticAsync(Guid postId, StatisticTypes statisticTypes)
         {
             return TryExecuteAsync(async () =>
             {
@@ -189,12 +195,51 @@ namespace Moonglade.Core
                     LastModifyOnUtc = post.PostPublish.LastModifiedUtc
                 });
 
-                if (null != postSlugModel && _blogConfig.ContentSettings.EnableImageLazyLoad)
+                if (null != postSlugModel)
                 {
-                    postSlugModel.Content = Utils.ReplaceImgSrc(postSlugModel.Content);
+                    postSlugModel.Content = Utils.AddLazyLoadToImgTag(postSlugModel.Content);
                 }
 
                 return new SuccessResponse<PostSlugModel>(postSlugModel);
+            });
+        }
+
+        public Task<Response<string>> GetRawContentAsync(int year, int month, int day, string slug)
+        {
+            return TryExecuteAsync<string>(async () =>
+            {
+                var date = new DateTime(year, month, day);
+                var spec = new PostSpec(date, slug);
+
+                var model = await _postRepository.SelectFirstOrDefaultAsync(spec,
+                    post => _htmlCodec.HtmlDecode(post.PostContent));
+                return new SuccessResponse<string>(model);
+            });
+        }
+
+        public Task<Response<PostSlugMetaModel>> GetMetaAsync(int year, int month, int day, string slug)
+        {
+            return TryExecuteAsync<PostSlugMetaModel>(async () =>
+            {
+                var date = new DateTime(year, month, day);
+                var spec = new PostSpec(date, slug);
+
+                var model = await _postRepository.SelectFirstOrDefaultAsync(spec, post => new PostSlugMetaModel
+                {
+                    Title = post.Title,
+                    PubDateUtc = post.PostPublish.PubDateUtc.GetValueOrDefault(),
+                    LastModifyOnUtc = post.PostPublish.LastModifiedUtc,
+
+                    Categories = post.PostCategory
+                                     .Select(pc => pc.Category.DisplayName)
+                                     .ToArray(),
+
+                    Tags = post.PostTag
+                               .Select(pt => pt.Tag.DisplayName)
+                               .ToArray()
+                });
+
+                return new SuccessResponse<PostSlugMetaModel>(model);
             });
         }
 
@@ -233,16 +278,16 @@ namespace Moonglade.Core
                     CommentCount = post.Comment.Count(c => c.IsApproved)
                 });
 
-                if (null != postSlugModel && _blogConfig.ContentSettings.EnableImageLazyLoad)
+                if (null != postSlugModel)
                 {
-                    postSlugModel.Content = Utils.ReplaceImgSrc(postSlugModel.Content);
+                    postSlugModel.Content = Utils.AddLazyLoadToImgTag(postSlugModel.Content);
                 }
 
                 return new SuccessResponse<PostSlugModel>(postSlugModel);
             });
         }
 
-        public Task<IReadOnlyList<PostMetaData>> GetPostMetaListAsync(PostPublishStatus postPublishStatus)
+        public Task<IReadOnlyList<PostMetaData>> GetMetaListAsync(PostPublishStatus postPublishStatus)
         {
             var spec = new PostSpec(postPublishStatus);
             return _postRepository.SelectAsync(spec, p => new PostMetaData
@@ -259,7 +304,7 @@ namespace Moonglade.Core
             });
         }
 
-        public Task<IReadOnlyList<PostMetaData>> GetMPostInsightsMetaListAsync(PostInsightsType insightsType)
+        public Task<IReadOnlyList<PostMetaData>> GetInsightsAsync(PostInsightsType insightsType)
         {
             var spec = new PostInsightsSpec(insightsType, 10);
             return _postRepository.SelectAsync(spec, p => new PostMetaData
@@ -351,9 +396,9 @@ namespace Moonglade.Core
             });
         }
 
-        public Response<PostEntity> CreateNewPost(CreatePostRequest request)
+        public async Task<Response<PostEntity>> CreateNewPost(CreatePostRequest request)
         {
-            return TryExecute(() =>
+            return await TryExecuteAsync<PostEntity>(async () =>
             {
                 var postModel = new PostEntity
                 {
@@ -363,8 +408,8 @@ namespace Moonglade.Core
                                     request.EditorContent :
                                     _htmlCodec.HtmlEncode(request.EditorContent),
                     ContentAbstract = Utils.GetPostAbstract(
-                                            request.EditorContent, 
-                                            AppSettings.PostAbstractWords, 
+                                            request.EditorContent,
+                                            AppSettings.PostAbstractWords,
                                             AppSettings.Editor == EditorChoice.Markdown),
                     CreateOnUtc = DateTime.UtcNow,
                     Slug = request.Slug.ToLower().Trim(),
@@ -441,6 +486,8 @@ namespace Moonglade.Core
                             };
 
                             tag = _tagRepository.Add(newTag);
+                            await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.TagCreated,
+                                $"Tag '{tag.NormalizedName}' created.");
                         }
 
                         postModel.PostTag.Add(new PostTagEntity
@@ -451,15 +498,18 @@ namespace Moonglade.Core
                     }
                 }
 
-                _postRepository.Add(postModel);
+                await _postRepository.AddAsync(postModel);
+
                 Logger.LogInformation($"New Post Created Successfully. PostId: {postModel.Id}");
+                await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.PostCreated, $"Post created, id: {postModel.Id}");
+
                 return new SuccessResponse<PostEntity>(postModel);
             });
         }
 
-        public Response<PostEntity> EditPost(EditPostRequest request)
+        public async Task<Response<PostEntity>> EditPost(EditPostRequest request)
         {
-            return TryExecute<PostEntity>(() =>
+            return await TryExecuteAsync<PostEntity>(async () =>
             {
                 var postModel = _postRepository.Get(request.Id);
                 if (null == postModel)
@@ -468,22 +518,25 @@ namespace Moonglade.Core
                 }
 
                 postModel.CommentEnabled = request.EnableComment;
-                postModel.PostContent = AppSettings.Editor == EditorChoice.Markdown ? 
-                                        request.EditorContent : 
+                postModel.PostContent = AppSettings.Editor == EditorChoice.Markdown ?
+                                        request.EditorContent :
                                         _htmlCodec.HtmlEncode(request.EditorContent);
                 postModel.ContentAbstract = Utils.GetPostAbstract(
-                                            request.EditorContent, 
-                                            AppSettings.PostAbstractWords, 
+                                            request.EditorContent,
+                                            AppSettings.PostAbstractWords,
                                             AppSettings.Editor == EditorChoice.Markdown);
 
                 // Address #221: Do not allow published posts back to draft status
                 // postModel.PostPublish.IsPublished = request.IsPublished;
                 // Edit draft -> save and publish, ignore false case because #221
+                bool isNewPublish = false;
                 if (request.IsPublished && !postModel.PostPublish.IsPublished)
                 {
                     postModel.PostPublish.IsPublished = true;
                     postModel.PostPublish.PublisherIp = request.RequestIp;
                     postModel.PostPublish.PubDateUtc = DateTime.UtcNow;
+
+                    isNewPublish = true;
                 }
 
                 // #325: Allow changing publish date for published posts
@@ -511,6 +564,9 @@ namespace Moonglade.Core
                         DisplayName = item,
                         NormalizedName = Utils.NormalizeTagName(item)
                     });
+
+                    await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.TagCreated,
+                        $"Tag '{item}' created.");
                 }
 
                 // 2. update tags
@@ -550,43 +606,52 @@ namespace Moonglade.Core
                     }
                 }
 
-                _postRepository.Update(postModel);
+                await _postRepository.UpdateAsync(postModel);
+
+                await _moongladeAudit.AddAuditEntry(
+                    EventType.Content,
+                    isNewPublish ? EventId.PostPublished : EventId.PostUpdated,
+                    $"Post updated, id: {postModel.Id}");
+
                 return new SuccessResponse<PostEntity>(postModel);
             });
         }
 
-        public Response RestoreDeletedPost(Guid postId)
+        public Task<Response> RestoreDeletedPostAsync(Guid postId)
         {
-            return TryExecute(() =>
+            return TryExecuteAsync(async () =>
             {
-                var pp = _postPublishRepository.Get(postId);
+                var pp = await _postPublishRepository.GetAsync(postId);
                 if (null == pp) return new FailedResponse((int)ResponseFailureCode.PostNotFound);
 
                 pp.IsDeleted = false;
-                var rows = _postPublishRepository.Update(pp);
-                return new Response(rows > 0);
+                await _postPublishRepository.UpdateAsync(pp);
+                await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.PostRestored, $"Post restored, id: {postId}");
+
+                return new SuccessResponse();
             }, keyParameter: postId);
         }
 
-        public Response Delete(Guid postId, bool isRecycle = false)
+        public Task<Response> DeleteAsync(Guid postId, bool isRecycle = false)
         {
-            return TryExecute(() =>
+            return TryExecuteAsync(async () =>
             {
-                var post = _postRepository.Get(postId);
+                var post = await _postRepository.GetAsync(postId);
                 if (null == post) return new FailedResponse((int)ResponseFailureCode.PostNotFound);
 
-                int rows;
                 if (isRecycle)
                 {
                     post.PostPublish.IsDeleted = true;
-                    rows = _postRepository.Update(post);
+                    await _postRepository.UpdateAsync(post);
+                    await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.PostRecycled, $"Post '{postId}' moved to Recycle Bin.");
                 }
                 else
                 {
-                    rows = _postRepository.Delete(post);
+                    await _postRepository.DeleteAsync(post);
+                    await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.PostDeleted, $"Post '{postId}' deleted from Recycle Bin.");
                 }
 
-                return new Response(rows > 0);
+                return new SuccessResponse();
             }, keyParameter: postId);
         }
 
@@ -597,6 +662,7 @@ namespace Moonglade.Core
                 var spec = new PostSpec(true);
                 var posts = await _postRepository.GetAsync(spec);
                 await _postRepository.DeleteAsync(posts);
+                await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.EmptyRecycleBin, "Emptied Recycle Bin.");
 
                 return new SuccessResponse();
             });

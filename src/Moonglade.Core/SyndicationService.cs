@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Edi.SyndicationFeedGenerator;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -10,20 +10,21 @@ using Moonglade.Configuration.Abstraction;
 using Moonglade.Data.Entities;
 using Moonglade.Data.Infrastructure;
 using Moonglade.Data.Spec;
+using Moonglade.HtmlEncoding;
 using Moonglade.Model;
 using Moonglade.Model.Settings;
+using Moonglade.Syndication;
 
 namespace Moonglade.Core
 {
     public class SyndicationService : MoongladeService
     {
-        private readonly IBlogConfig _blogConfig;
-
         private readonly string _baseUrl;
 
+        private readonly IBlogConfig _blogConfig;
         private readonly IRepository<CategoryEntity> _categoryRepository;
-
         private readonly IRepository<PostEntity> _postRepository;
+        private readonly IHtmlCodec _htmlCodec;
 
         public SyndicationService(
             ILogger<SyndicationService> logger,
@@ -31,11 +32,13 @@ namespace Moonglade.Core
             IBlogConfig blogConfig,
             IHttpContextAccessor httpContextAccessor,
             IRepository<CategoryEntity> categoryRepository,
-            IRepository<PostEntity> postRepository) : base(logger, settings)
+            IRepository<PostEntity> postRepository,
+            IHtmlCodec htmlCodec) : base(logger, settings)
         {
             _blogConfig = blogConfig;
             _categoryRepository = categoryRepository;
             _postRepository = postRepository;
+            _htmlCodec = htmlCodec;
 
             var acc = httpContextAccessor;
             _baseUrl = $"{acc.HttpContext.Request.Scheme}://{acc.HttpContext.Request.Host}";
@@ -43,10 +46,11 @@ namespace Moonglade.Core
 
         public async Task RefreshRssFilesForCategoryAsync(string categoryName)
         {
-            Logger.LogInformation($"Start refreshing RSS feed for category {categoryName}.");
             var cat = await _categoryRepository.GetAsync(c => c.Title == categoryName);
             if (null != cat)
             {
+                Logger.LogInformation($"Start refreshing RSS feed for category {categoryName}.");
+
                 var itemCollection = await GetPostsAsFeedItemsAsync(cat.Id);
 
                 var rw = new SyndicationFeedGenerator
@@ -61,12 +65,10 @@ namespace Moonglade.Core
                     MaxContentLength = 0
                 };
 
-                await rw.WriteRss20FileAsync($@"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}\feed\posts-category-{categoryName}.xml");
+                var path = Path.Join($"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}", "feed", $"posts-category-{categoryName}.xml");
+
+                await rw.WriteRss20FileAsync(path);
                 Logger.LogInformation($"Finished refreshing RSS feed for category {categoryName}.");
-            }
-            else
-            {
-                Logger.LogWarning($"Trying to refresh rss feed for category {categoryName} but {categoryName} is not found.");
             }
         }
 
@@ -90,21 +92,24 @@ namespace Moonglade.Core
             if (isAtom)
             {
                 Logger.LogInformation("Writing ATOM file.");
-                await rw.WriteAtom10FileAsync($@"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}\feed\posts-atom.xml");
+
+                var path = Path.Join($"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}", "feed", "posts-atom.xml");
+                await rw.WriteAtom10FileAsync(path);
             }
             else
             {
                 Logger.LogInformation("Writing RSS file.");
-                await rw.WriteRss20FileAsync($@"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}\feed\posts.xml");
+
+                var path = Path.Join($"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}", "feed",
+                    "posts.xml");
+                await rw.WriteRss20FileAsync(path);
             }
 
             Logger.LogInformation("Finished writing feed for posts.");
         }
 
-        private Task<IReadOnlyList<SimpleFeedItem>> GetPostsAsFeedItemsAsync(Guid? categoryId = null)
+        private async Task<IReadOnlyList<SimpleFeedItem>> GetPostsAsFeedItemsAsync(Guid? categoryId = null)
         {
-            Logger.LogInformation($"{nameof(GetPostsAsFeedItemsAsync)} - {nameof(categoryId)}: {categoryId}");
-
             int? top = null;
             if (_blogConfig.FeedSettings.RssItemCount != 0)
             {
@@ -112,17 +117,46 @@ namespace Moonglade.Core
             }
 
             var postSpec = new PostSpec(categoryId, top);
-            return _postRepository.SelectAsync(postSpec, p => p.PostPublish.PubDateUtc != null ? new SimpleFeedItem
+            var list = await _postRepository.SelectAsync(postSpec, p => p.PostPublish.PubDateUtc != null ? new SimpleFeedItem
             {
                 Id = p.Id.ToString(),
                 Title = p.Title,
                 PubDateUtc = p.PostPublish.PubDateUtc.Value,
-                Description = p.ContentAbstract,
+                Description = _blogConfig.FeedSettings.UseFullContent ? p.PostContent : p.ContentAbstract,
                 Link = $"{_baseUrl}/post/{p.PostPublish.PubDateUtc.Value.Year}/{p.PostPublish.PubDateUtc.Value.Month}/{p.PostPublish.PubDateUtc.Value.Day}/{p.Slug}",
                 Author = _blogConfig.FeedSettings.AuthorName,
                 AuthorEmail = _blogConfig.EmailSettings.AdminEmail,
                 Categories = p.PostCategory.Select(pc => pc.Category.DisplayName).ToList()
             } : null);
+
+            // Workaround EF limitation
+            // Man, this is super ugly
+            if (_blogConfig.FeedSettings.UseFullContent && list.Any())
+            {
+                foreach (var simpleFeedItem in list)
+                {
+                    simpleFeedItem.Description = GetPostContent(simpleFeedItem.Description);
+                }
+            }
+
+            return list;
+        }
+
+        private string GetPostContent(string rawContent)
+        {
+            var editor = AppSettings.Editor;
+            switch (editor)
+            {
+                case EditorChoice.HTML:
+                    var html = _htmlCodec.HtmlDecode(rawContent);
+                    return html;
+                case EditorChoice.Markdown:
+                    var md2Html = Utils.ConvertMarkdownContent(rawContent, Utils.MarkdownConvertType.Html, false);
+                    return md2Html;
+                case EditorChoice.None:
+                default:
+                    return rawContent;
+            }
         }
     }
 }

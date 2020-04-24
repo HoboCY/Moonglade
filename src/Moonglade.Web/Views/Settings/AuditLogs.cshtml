@@ -1,0 +1,103 @@
+﻿@using X.PagedList.Mvc.Core
+@using X.PagedList.Mvc.Core.Common
+@model X.PagedList.StaticPagedList<Moonglade.Auditing.AuditEntry>
+@{
+    Layout = "_LayoutAdmin";
+}
+
+<partial name="_SettingsHeader" />
+
+@if (null != ViewBag.IsServerError && ViewBag.IsServerError)
+{
+    <partial name="_ServerErrorMessage" />
+}
+else
+{
+    if (null != ViewBag.AuditLogDisabled && ViewBag.AuditLogDisabled)
+    {
+        <div class="alert alert-warning">
+            Audit Log is disabled.
+        </div>
+    }
+    else if (Model.Any())
+    {
+        <a href="javascript:;" class="btn btn-danger" data-toggle="modal" data-target="#clearauditModal">Clear Audit Logs</a>
+
+        <table class="table table-bordered mt-3">
+            <thead>
+                <tr>
+                    <th>Event Time (UTC)</th>
+                    <th>Event Type</th>
+                    <th>Event Id</th>
+                    <th>Message</th>
+                    <th>Username</th>
+                    <th>Machine Name</th>
+                    <th>IP Address</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td>
+                            @item.EventTimeUtc
+                        </td>
+                        <td>
+                            @item.EventType
+                        </td>
+                        <td>
+                            @item.EventId
+                        </td>
+                        <td>
+                            @item.Message
+                        </td>
+                        <td>
+                            @item.Username
+                        </td>
+                        <td>
+                            @item.MachineName
+                        </td>
+                        <td>
+                            @item.IpAddressV4
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @Html.PagedListPager(Model, page => $"?page={page}", new PagedListRenderOptions
+        {
+            LiElementClasses = new[] { "page-item" },
+            PageClasses = new[] { "page-link" },
+            UlElementClasses = new[] { "pagination justify-content-end" },
+            MaximumPageNumbersToDisplay = 5,
+            DisplayEllipsesWhenNotShowingAllPageNumbers = false
+        })
+    }
+    else
+    {
+        <div class="alert alert-info">
+            No Audit Logs.
+        </div>
+    }
+}
+
+<div class="modal fade" id="clearauditModal" tabindex="-1" role="dialog" aria-labelledby="clearauditModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="clearauditModalLabel">Clear Audit Logs</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                Are you ABSOLUTELY sure? ALL audit logs will be erased!
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <a asp-action="ClearAuditLogs" class="btn btn-danger btn-clear">Clear Now</a>
+            </div>
+        </div>
+    </div>
+</div>

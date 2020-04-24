@@ -4,11 +4,13 @@ using System.Threading.Tasks;
 using Edi.Practice.RequestResponseModel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moonglade.Auditing;
 using Moonglade.Data.Entities;
 using Moonglade.Data.Infrastructure;
-using Moonglade.HtmlCodec;
+using Moonglade.HtmlEncoding;
 using Moonglade.Model;
 using Moonglade.Model.Settings;
+using EventId = Moonglade.Auditing.EventId;
 
 namespace Moonglade.Core
 {
@@ -16,15 +18,18 @@ namespace Moonglade.Core
     {
         private readonly IHtmlCodec _htmlCodec;
         private readonly IRepository<CustomPageEntity> _customPageRepository;
+        private readonly IMoongladeAudit _moongladeAudit;
 
         public CustomPageService(
             ILogger<CustomPageService> logger,
             IOptions<AppSettings> settings,
             IRepository<CustomPageEntity> customPageRepository,
-            IHtmlCodec htmlCodec) : base(logger, settings)
+            IHtmlCodec htmlCodec,
+            IMoongladeAudit moongladeAudit) : base(logger, settings)
         {
             _customPageRepository = customPageRepository;
             _htmlCodec = htmlCodec;
+            _moongladeAudit = moongladeAudit;
         }
 
         public Task<Response<CustomPage>> GetPageAsync(Guid pageId)
@@ -53,7 +58,7 @@ namespace Moonglade.Core
             });
         }
 
-        public Task<Response<IReadOnlyList<CustomPageMetaData>>> GetPagesMetaDataListAsync()
+        public Task<Response<IReadOnlyList<CustomPageMetaData>>> GetPagesMetaAsync()
         {
             return TryExecuteAsync<IReadOnlyList<CustomPageMetaData>>(async () =>
             {
@@ -86,6 +91,8 @@ namespace Moonglade.Core
                 };
 
                 await _customPageRepository.AddAsync(customPage);
+                await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.PageCreated, $"Page '{customPage.Id}' created.");
+
                 return new SuccessResponse<Guid>(uid);
             });
         }
@@ -97,7 +104,7 @@ namespace Moonglade.Core
                 var page = await _customPageRepository.GetAsync(request.Id);
                 if (null == page)
                 {
-                    throw new InvalidOperationException($"CustomPageEntity with Id '{request.Id}' is not found.");
+                    throw new InvalidOperationException($"CustomPageEntity with Id '{request.Id}' not found.");
                 }
 
                 page.Title = request.Title.Trim();
@@ -108,21 +115,25 @@ namespace Moonglade.Core
                 page.UpdatedOnUtc = DateTime.UtcNow;
 
                 await _customPageRepository.UpdateAsync(page);
+                await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.PageUpdated, $"Page '{request.Id}' updated.");
+
                 return new SuccessResponse<Guid>(page.Id);
             });
         }
 
-        public Response DeletePage(Guid pageId)
+        public Task<Response> DeletePageAsync(Guid pageId)
         {
-            return TryExecute(() =>
+            return TryExecuteAsync(async () =>
             {
-                var page = _customPageRepository.Get(pageId);
+                var page = await _customPageRepository.GetAsync(pageId);
                 if (null == page)
                 {
-                    throw new InvalidOperationException($"CustomPageEntity with Id '{pageId}' is not found.");
+                    throw new InvalidOperationException($"CustomPageEntity with Id '{pageId}' not found.");
                 }
 
-                _customPageRepository.Delete(pageId);
+                await _customPageRepository.DeleteAsync(pageId);
+                await _moongladeAudit.AddAuditEntry(EventType.Content, EventId.PageDeleted, $"Page '{pageId}' deleted.");
+
                 return new SuccessResponse();
             });
         }

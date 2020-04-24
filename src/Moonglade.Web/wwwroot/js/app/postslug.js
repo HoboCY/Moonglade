@@ -22,6 +22,15 @@
         $('.post-content img').removeAttr('width');
         $('.post-content img').addClass('img-fluid img-thumbnail');
     },
+    applyImageZooming: function () {
+        if (getResponsiveBreakpoint() !== 'xs') {
+            $('.post-content img').click(function (e) {
+                var src = $(this).attr('src');
+                $('#imgzoom').attr('src', src);
+                $('#imgzoomModal').modal();
+            });
+        }
+    },
     renderCodeHighlighter: function () {
         $('pre').each(function (i, pre) {
             // Find <pre> that doesn't have a <code> inside it.
@@ -41,10 +50,12 @@
     },
     useDarkMode: function () {
         $('#moonglade-nav').removeClass('bg-moonglade-accent1');
-        $('#moonglade-nav').addClass('bg-dark');
+        $('#moonglade-nav, #moonglade-footer').addClass('bg-dark');
+        $('.post-publish-info-mobile').removeClass('bg-light');
+        $('.post-publish-info-mobile').addClass('bg-dark');
 
         $('#moonglade-footer').removeClass('bg-moonglade-accent2');
-        $('#moonglade-footer').addClass('bg-dark');
+        $('').addClass('bg-dark');
 
         $('.post-content').addClass('darkmode');
 
@@ -59,16 +70,19 @@
 
         this.isDarkMode = true;
         $('.lightswitch').addClass('bg-dark text-light border-secondary');
+        $('hr').addClass('hr-dark');
         $('#lighticon').removeClass('icon-sun-o');
         $('#lighticon').addClass('icon-moon-o');
+
         console.info('Switched to dark mode');
     },
     useLightMode: function () {
         $('#moonglade-nav').addClass('bg-moonglade-accent1');
-        $('#moonglade-nav').removeClass('bg-dark');
+        $('#moonglade-nav, #moonglade-footer').removeClass('bg-dark');
+        $('.post-publish-info-mobile').removeClass('bg-dark');
+        $('.post-publish-info-mobile').addClass('bg-light');
 
         $('#moonglade-footer').addClass('bg-moonglade-accent2');
-        $('#moonglade-footer').removeClass('bg-dark');
 
         $('.post-content').removeClass('darkmode');
 
@@ -83,6 +97,7 @@
 
         this.isDarkMode = false;
         $('.lightswitch').removeClass('bg-dark text-light border-secondary');
+        $('hr').removeClass('hr-dark');
         $('#lighticon').addClass('icon-sun-o');
         $('#lighticon').removeClass('icon-moon-o');
         console.info('Switched to light mode');

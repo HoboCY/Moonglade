@@ -3,7 +3,6 @@ using System.IO;
 using System.Threading.Tasks;
 using Edi.Practice.RequestResponseModel;
 using Microsoft.Extensions.Logging;
-using Moonglade.Model;
 
 namespace Moonglade.ImageStorage.FileSystem
 {
@@ -27,11 +26,11 @@ namespace Moonglade.ImageStorage.FileSystem
         {
             try
             {
-                var imagePath = Path.Combine(_path, fileName);
+                var imagePath = Path.Join(_path, fileName);
 
                 if (!File.Exists(imagePath))
                 {
-                    return new FailedResponse<ImageInfo>((int)ResponseFailureCode.ImageNotExistInFileSystem);
+                    return new FailedResponse<ImageInfo>((int)ImageResponseCode.ImageNotExistInFileSystem);
                 }
 
                 var extension = Path.GetExtension(imagePath);
@@ -50,7 +49,7 @@ namespace Moonglade.ImageStorage.FileSystem
             catch (Exception e)
             {
                 _logger.LogError(e, $"Error getting image file {fileName}");
-                return new FailedResponse<ImageInfo>((int)ResponseFailureCode.GeneralException)
+                return new FailedResponse<ImageInfo>((int)ImageResponseCode.GeneralException)
                 {
                     Exception = e,
                     Message = e.Message
@@ -63,18 +62,18 @@ namespace Moonglade.ImageStorage.FileSystem
             try
             {
                 await Task.CompletedTask;
-                var imagePath = Path.Combine(_path, fileName);
+                var imagePath = Path.Join(_path, fileName);
                 if (File.Exists(imagePath))
                 {
                     File.Delete(imagePath);
                     return new SuccessResponse();
                 }
-                return new FailedResponse<ImageInfo>((int)ResponseFailureCode.ImageNotExistInFileSystem);
+                return new FailedResponse<ImageInfo>((int)ImageResponseCode.ImageNotExistInFileSystem);
             }
             catch (Exception e)
             {
                 _logger.LogError(e, $"Error deleting image file {fileName}");
-                return new FailedResponse<ImageInfo>((int)ResponseFailureCode.GeneralException)
+                return new FailedResponse<ImageInfo>((int)ImageResponseCode.GeneralException)
                 {
                     Exception = e,
                     Message = e.Message
@@ -94,7 +93,7 @@ namespace Moonglade.ImageStorage.FileSystem
         {
             try
             {
-                var fullPath = Path.Combine(_path, fileName);
+                var fullPath = Path.Join(_path, fileName);
 
                 await using (var sourceStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None,
                     4096, true))
@@ -107,7 +106,7 @@ namespace Moonglade.ImageStorage.FileSystem
             catch (Exception e)
             {
                 _logger.LogError(e, $"Error writing image file {fileName}");
-                return new FailedResponse<string>((int)ResponseFailureCode.GeneralException)
+                return new FailedResponse<string>((int)ImageResponseCode.GeneralException)
                 {
                     Exception = e,
                     Message = e.Message

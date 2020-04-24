@@ -30,7 +30,7 @@ namespace Moonglade.Web.Controllers
 
         public string[] InvalidPageRouteNames => new[] { "index", "manage", "createoredit", "create", "edit" };
 
-        [HttpGet("{routeName}")]
+        [HttpGet("{routeName:regex(^(?!-)([[a-zA-Z0-9-]]+)$)}")]
         public async Task<IActionResult> Index(string routeName, [FromServices] IMemoryCache cache)
         {
             if (string.IsNullOrWhiteSpace(routeName))
@@ -62,7 +62,7 @@ namespace Moonglade.Web.Controllers
         [HttpGet("manage")]
         public async Task<IActionResult> Manage()
         {
-            var response = await _customPageService.GetPagesMetaDataListAsync();
+            var response = await _customPageService.GetPagesMetaAsync();
             return response.IsSuccess ? View(response.Item) : ServerError();
         }
 
@@ -155,17 +155,15 @@ namespace Moonglade.Web.Controllers
 
         [Authorize]
         [HttpPost("manage/delete")]
-        public IActionResult Delete(Guid pageId, string routeName, [FromServices] IMemoryCache cache)
+        public async Task<IActionResult> Delete(Guid pageId, string routeName, [FromServices] IMemoryCache cache)
         {
             try
             {
-                var response = _customPageService.DeletePage(pageId);
+                var response = await _customPageService.DeletePageAsync(pageId);
                 if (response.IsSuccess)
                 {
                     var cacheKey = $"page-{routeName.ToLower()}";
                     cache.Remove(cacheKey);
-
-                    Logger.LogInformation($"User '{User.Identity.Name}' deleted custom page id: '{pageId}', {nameof(routeName)}: '{routeName}'");
 
                     return Json(pageId);
                 }

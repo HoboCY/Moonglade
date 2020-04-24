@@ -1,9 +1,7 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -18,28 +16,28 @@ namespace Moonglade.Web.Controllers
     {
         private readonly IBlogConfig _blogConfig;
 
-        private readonly PostSearchService _postSearchService;
+        private readonly SearchService _searchService;
 
         public SearchController(
             ILogger<OpmlController> logger,
             IOptions<AppSettings> settings,
-            PostSearchService postSearchService,
+            SearchService searchService,
             IBlogConfig blogConfig)
             : base(logger, settings)
         {
-            _postSearchService = postSearchService;
+            _searchService = searchService;
             _blogConfig = blogConfig;
         }
 
         [Route("opensearch")]
         public async Task<IActionResult> OpenSearch()
         {
-            var openSearchDataFile = $@"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}\{Constants.OpenSearchFileName}";
+            var openSearchDataFile = Path.Join($"{SiteDataDirectory}", $"{Constants.OpenSearchFileName}");
             if (!System.IO.File.Exists(openSearchDataFile))
             {
                 Logger.LogInformation($"OpenSearch file not found, writing new file on {openSearchDataFile}");
 
-                await WriteOpenSearchFileAsync(HttpContext);
+                await WriteOpenSearchFileAsync();
                 if (!System.IO.File.Exists(openSearchDataFile))
                 {
                     Logger.LogError("OpenSearch file still not found, what the heck?!");
@@ -75,7 +73,7 @@ namespace Moonglade.Web.Controllers
 
                 ViewBag.TitlePrefix = term;
 
-                var response = await _postSearchService.SearchPostAsync(term);
+                var response = await _searchService.SearchPostAsync(term);
                 if (!response.IsSuccess)
                 {
                     SetFriendlyErrorMessage();
@@ -85,9 +83,9 @@ namespace Moonglade.Web.Controllers
             return RedirectToAction("Index", "Post");
         }
 
-        private async Task WriteOpenSearchFileAsync(HttpContext ctx)
+        private async Task WriteOpenSearchFileAsync()
         {
-            var openSearchDataFile = $@"{AppDomain.CurrentDomain.GetData(Constants.DataDirectory)}\{Constants.OpenSearchFileName}";
+            var openSearchDataFile = Path.Join($"{SiteDataDirectory}", $"{Constants.OpenSearchFileName}");
 
             await using var fs = new FileStream(openSearchDataFile, FileMode.Create,
                 FileAccess.Write, FileShare.None, 4096, true);
@@ -105,12 +103,12 @@ namespace Moonglade.Web.Controllers
                 writer.WriteAttributeString("height", "16");
                 writer.WriteAttributeString("width", "16");
                 writer.WriteAttributeString("type", "image/vnd.microsoft.icon");
-                writer.WriteValue($"{ctx.Request.Scheme}://{ctx.Request.Host}/favicon.ico");
+                writer.WriteValue($"{SiteRootUrl}/favicon.ico");
                 writer.WriteEndElement();
 
                 writer.WriteStartElement("Url");
                 writer.WriteAttributeString("type", "text/html");
-                writer.WriteAttributeString("template", $"{ctx.Request.Scheme}://{ctx.Request.Host}/search/{{searchTerms}}");
+                writer.WriteAttributeString("template", $"{SiteRootUrl}/search/{{searchTerms}}");
                 writer.WriteEndElement();
 
                 writer.WriteEndElement();
